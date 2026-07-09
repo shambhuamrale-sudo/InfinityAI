@@ -10,16 +10,28 @@ import bcrypt from 'bcryptjs'
 import jwt from 'jsonwebtoken'
 import { z } from 'zod'
 import { MongoClient, ObjectId } from 'mongodb'
-import { MongoMemoryServer } from 'mongodb-memory-server'
 
 dotenv.config()
+
+const IS_PRODUCTION = process.env.NODE_ENV === 'production'
+const clientOriginEnv = process.env.CLIENT_ORIGIN
+const allowedOrigins = clientOriginEnv
+  ? clientOriginEnv.split(',').map((o) => o.trim()).filter(Boolean)
+  : []
+const cookieSameSite = process.env.COOKIE_SAMESITE || (allowedOrigins.length ? 'none' : 'lax')
+const sessionCookieOptions = {
+  httpOnly: true,
+  sameSite: cookieSameSite,
+  secure: IS_PRODUCTION,
+  maxAge: 7 * 24 * 60 * 60 * 1000
+}
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
 const app = express()
 
 app.use(helmet({ crossOriginResourcePolicy: false }))
-app.use(cors({ origin: true, credentials: true }))
+app.use(cors(allowedOrigins.length ? { origin: allowedOrigins, credentials: true } : { origin: true, credentials: true }))
 app.use(cookieParser())
 app.use(express.json({ limit: '1mb' }))
 
@@ -106,13 +118,23 @@ let stateCollection = null
 let usersCollection = null
 let chatsCollection = null
 let imagesCollection = null
+let MongoMemoryServer = null
 let mongoMemoryServer = null
 
 async function connectMongo() {
   if (mongoDb) return mongoDb
   const uri = process.env.MONGO_URI
+  if (IS_PRODUCTION && !uri) {
+    const message = 'MONGO_URI is required in production. Configure MongoDB Atlas (see DEPLOYMENT.md).'
+    console.error(message)
+    throw new Error(message)
+  }
   try {
     if (!uri) {
+      if (!MongoMemoryServer) {
+        const mod = await import('mongodb-memory-server')
+        MongoMemoryServer = mod.MongoMemoryServer
+      }
       mongoMemoryServer = await MongoMemoryServer.create()
       mongoClient = new MongoClient(mongoMemoryServer.getUri())
       await mongoClient.connect()
@@ -129,6 +151,10 @@ async function connectMongo() {
     await ensureAdmin()
     return mongoDb
   } catch (error) {
+    if (IS_PRODUCTION) {
+      console.error('MongoDB connection failed (production requires MongoDB Atlas):', error.message)
+      throw error
+    }
     console.warn('MongoDB unavailable, using in-memory state:', error.message)
     return null
   }
@@ -324,7 +350,7 @@ app.post('/api/auth/signup', authLimiter, async (req, res) => {
   const result = await usersCollection.insertOne(user)
   user._id = result.insertedId
   const token = signToken(user)
-  res.cookie('token', token, { httpOnly: true, sameSite: 'lax', secure: process.env.NODE_ENV === 'production', maxAge: 7 * 24 * 60 * 60 * 1000 })
+  res.cookie('token', token, sessionCookieOptions)
   const { password: _password, ...safe } = user
   res.status(201).json({ user: safe, token })
 })
@@ -340,13 +366,13 @@ app.post('/api/auth/login', authLimiter, async (req, res) => {
   const valid = await bcrypt.compare(password, user.passwordHash)
   if (!valid) return res.status(401).json({ error: 'Invalid email or password' })
   const token = signToken(user)
-  res.cookie('token', token, { httpOnly: true, sameSite: 'lax', secure: process.env.NODE_ENV === 'production', maxAge: 7 * 24 * 60 * 60 * 1000 })
+  res.cookie('token', token, sessionCookieOptions)
   const { password: _password, ...safe } = user
   res.json({ user: safe, token })
 })
 
 app.post('/api/auth/logout', async (_req, res) => {
-  res.clearCookie('token', { httpOnly: true, sameSite: 'lax', secure: process.env.NODE_ENV === 'production' })
+  res.clearCookie('token', { httpOnly: true, sameSite: cookieSameSite, secure: IS_PRODUCTION })
   res.json({ ok: true })
 })
 
@@ -474,3 +500,5 @@ if (process.argv[1] && process.argv[1].endsWith('server.js')) {
     process.exit(1)
   })
 }
+
+export default app

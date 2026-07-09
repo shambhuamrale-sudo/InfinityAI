@@ -321,7 +321,8 @@ export function AppProvider({ children }) {
   }
 
   const login = async (email, password) => {
-    const response = await fetch('/api/auth/login', {
+    const apiBase = import.meta.env.VITE_API_BASE_URL || '/api'
+    const response = await fetch(`${apiBase}/auth/login`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email, password }),
@@ -340,7 +341,8 @@ export function AppProvider({ children }) {
   }
 
   const signup = async (name, email, password) => {
-    const response = await fetch('/api/auth/signup', {
+    const apiBase = import.meta.env.VITE_API_BASE_URL || '/api'
+    const response = await fetch(`${apiBase}/auth/signup`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ name, email, password }),
@@ -359,7 +361,8 @@ export function AppProvider({ children }) {
   }
 
   const logout = async () => {
-    await fetch('/api/auth/logout', { method: 'POST', credentials: 'include' }).catch(() => {})
+    const apiBase = import.meta.env.VITE_API_BASE_URL || '/api'
+    await fetch(`${apiBase}/auth/logout`, { method: 'POST', credentials: 'include' }).catch(() => {})
     setAuth({ user: null, isAuthenticated: false, loading: false })
     setState((prev) => ({ ...prev, user: { ...createDefaultState().user, ...prev.user } }))
     addToast({ kind: 'info', title: 'Signed out', message: 'You have been logged out securely.' })

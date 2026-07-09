@@ -1,0 +1,39 @@
+# Render Blueprint for the InfinityAI Express backend.
+# This runs the standalone Express server (Ollama + ComfyUI + MongoDB Atlas).
+# Deploy: connect the repo in Render and select "render.yaml" as the Blueprint.
+
+services:
+  - type: web
+    name: infinityai-backend
+    runtime: docker
+    # Builds from the project Dockerfile and runs `node server.js`.
+    dockerfilePath: ./Dockerfile
+    # Render exposes the service on $PORT; server.js reads process.env.PORT.
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 4000
+      - key: MONGO_URI
+        sync: false
+      - key: MONGO_DB
+        value: infinityai
+      - key: CLIENT_ORIGIN
+        sync: false
+      - key: JWT_SECRET
+        sync: false
+      - key: JWT_EXPIRY
+        value: 7d
+      - key: AUTH_SALT_ROUNDS
+        value: 12
+      - key: ADMIN_EMAIL
+        sync: false
+      - key: ADMIN_PASSWORD
+        sync: false
+      - key: OLLAMA_URL
+        sync: false
+      - key: OLLAMA_MODEL
+        value: llama3.2
+      - key: COMFYUI_URL
+        sync: false
