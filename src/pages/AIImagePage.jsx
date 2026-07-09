@@ -9,6 +9,8 @@ import { useAppContext } from '../context/AppContext'
 
 const presets = ['Cinematic product mockup', 'Futuristic interface hero', 'Editorial AI portrait']
 
+const apiBase = import.meta.env.VITE_API_BASE_URL || '/api'
+
 export default function AIImagePage() {
   const { images, addImageEntry, addFavorite } = useAppContext()
   const [prompt, setPrompt] = useState('')
@@ -19,7 +21,7 @@ export default function AIImagePage() {
     if (!prompt.trim()) return
     setLoading(true)
     try {
-      const response = await fetch('/api/image', {
+      const response = await fetch(`${apiBase}/image`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ prompt })

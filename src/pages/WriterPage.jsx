@@ -5,6 +5,8 @@ import BackgroundEffects from '../components/BackgroundEffects'
 import GlassPanel from '../components/GlassPanel'
 import { useAppContext } from '../context/AppContext'
 
+const apiBase = import.meta.env.VITE_API_BASE_URL || '/api'
+
 export default function WriterPage() {
   const { addFavorite } = useAppContext()
   const [prompt, setPrompt] = useState('')
@@ -15,7 +17,7 @@ export default function WriterPage() {
     if (!prompt.trim()) return
     setLoading(true)
     try {
-      const res = await fetch('/api/writer', {
+      const res = await fetch(`${apiBase}/writer`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ prompt }),

@@ -3,7 +3,6 @@ import { ArrowRight, Sparkles, Mail, Lock, UserRound, ShieldCheck, Bot, Wand2 } 
 import BackgroundEffects from '../components/BackgroundEffects'
 import GlassPanel from '../components/GlassPanel'
 import PremiumButton from '../components/PremiumButton'
-import ToastBanner from '../components/ToastBanner'
 import { useAppContext } from '../context/AppContext'
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'

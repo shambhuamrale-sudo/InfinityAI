@@ -1,5 +1,5 @@
 import { AnimatePresence, motion } from 'framer-motion'
-import { ChevronDown, LayoutGrid, Settings, CreditCard, ShieldCheck, LogOut } from 'lucide-react'
+import { ChevronDown, LayoutGrid, Settings, CreditCard, LogOut } from 'lucide-react'
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useAppContext } from '../context/AppContext'

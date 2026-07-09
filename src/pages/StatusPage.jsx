@@ -1,5 +1,5 @@
 import { motion } from 'framer-motion'
-import { Activity, ShieldCheck, Sparkles } from 'lucide-react'
+import { Activity, ShieldCheck } from 'lucide-react'
 import BackgroundEffects from '../components/BackgroundEffects'
 import Footer from '../components/Footer'
 
@@ -28,7 +28,7 @@ export default function StatusPage() {
             </div>
           </div>
           <div className="mt-6 grid gap-4 md:grid-cols-2">
-            {systems.map((system, index) => (
+            {systems.map((system, _index) => (
               <div key={system.name} className="rounded-[1.1rem] border border-white/10 bg-white/5 p-4">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3">

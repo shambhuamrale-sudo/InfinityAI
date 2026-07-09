@@ -1,7 +1,6 @@
 import { createContext, useContext, useEffect, useMemo, useState } from 'react'
 
 const AppContext = createContext(null)
-const AUTH_STORAGE_KEY = 'infinityai-auth-v1'
 const STORAGE_KEY = 'infinityai-state-v1'
 
 const defaultState = {
@@ -388,7 +387,8 @@ export function AppProvider({ children }) {
     setCommandPaletteOpen: (value) => setState((prev) => ({ ...prev, ui: { ...prev.ui, commandPaletteOpen: value } })),
     setNotificationsOpen: (value) => setState((prev) => ({ ...prev, ui: { ...prev.ui, notificationsOpen: value } })),
     setUpgradeModalOpen: (value) => setState((prev) => ({ ...prev, ui: { ...prev.ui, upgradeModalOpen: value } }))
-  }), [state, hydrated, auth])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }), [state, auth])
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>
 }

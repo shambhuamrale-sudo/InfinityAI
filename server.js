@@ -116,8 +116,8 @@ let mongoClient = null
 let mongoDb = null
 let stateCollection = null
 let usersCollection = null
-let chatsCollection = null
-let imagesCollection = null
+let _chatsCollection = null
+let _imagesCollection = null
 let MongoMemoryServer = null
 let mongoMemoryServer = null
 
@@ -146,8 +146,8 @@ async function connectMongo() {
     }
     stateCollection = mongoDb.collection('app_state')
     usersCollection = mongoDb.collection('users')
-    chatsCollection = mongoDb.collection('chats')
-    imagesCollection = mongoDb.collection('images')
+    _chatsCollection = mongoDb.collection('chats')
+    _imagesCollection = mongoDb.collection('images')
     await ensureAdmin()
     return mongoDb
   } catch (error) {
@@ -204,7 +204,7 @@ async function getUserFromToken(req) {
     const userId = ObjectId.isValid(decoded.id) ? new ObjectId(decoded.id) : decoded.id
     const user = await usersCollection.findOne({ _id: userId })
     if (!user) return null
-    const { password, ...safe } = user
+    const { passwordHash: _passwordHash, ...safe } = user
     return safe
   } catch {
     return null
@@ -351,7 +351,7 @@ app.post('/api/auth/signup', authLimiter, async (req, res) => {
   user._id = result.insertedId
   const token = signToken(user)
   res.cookie('token', token, sessionCookieOptions)
-  const { password: _password, ...safe } = user
+  const { passwordHash: _ph, ...safe } = user
   res.status(201).json({ user: safe, token })
 })
 
@@ -367,7 +367,7 @@ app.post('/api/auth/login', authLimiter, async (req, res) => {
   if (!valid) return res.status(401).json({ error: 'Invalid email or password' })
   const token = signToken(user)
   res.cookie('token', token, sessionCookieOptions)
-  const { password: _password, ...safe } = user
+  const { passwordHash: _ph2, ...safe } = user
   res.json({ user: safe, token })
 })
 

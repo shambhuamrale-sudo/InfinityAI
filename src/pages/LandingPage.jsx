@@ -1,16 +1,10 @@
 import { motion, useMotionValue, useSpring } from 'framer-motion'
-import { ArrowRight, Bot, Sparkles, Wand2, Code2, FileText, Languages, Briefcase, ShieldCheck, ChevronRight, Zap, PlayCircle, BrainCircuit, PanelTop, CheckCircle2, MessageSquare } from 'lucide-react'
+import { ArrowRight, Bot, Sparkles, Wand2, Code2, FileText, Languages, Briefcase, ShieldCheck, ChevronRight, Zap, PlayCircle, BrainCircuit, PanelTop, CheckCircle2 } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import BackgroundEffects from '../components/BackgroundEffects'
 import GlassPanel from '../components/GlassPanel'
 import PremiumButton from '../components/PremiumButton'
 import SectionShell from '../components/SectionShell'
-
-const stats = [
-  { value: '1.2M+', label: 'AI actions generated' },
-  { value: '99.98%', label: 'workflow uptime' },
-  { value: '24/7', label: 'creative automation' }
-]
 
 const logos = ['Notion', 'Linear', 'Vercel', 'Cohere', 'Supabase', 'OpenRouter']
 

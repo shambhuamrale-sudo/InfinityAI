@@ -4,6 +4,8 @@ import { useState } from 'react'
 import BackgroundEffects from '../components/BackgroundEffects'
 import GlassPanel from '../components/GlassPanel'
 
+const apiBase = import.meta.env.VITE_API_BASE_URL || '/api'
+
 export default function TranslatePage() {
   const [text, setText] = useState('')
   const [target, setTarget] = useState('Spanish')
@@ -13,7 +15,7 @@ export default function TranslatePage() {
   const handleTranslate = async () => {
     setLoading(true)
     try {
-      const res = await fetch('/api/translate', {
+      const res = await fetch(`${apiBase}/translate`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ text, target }),

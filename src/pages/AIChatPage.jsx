@@ -9,6 +9,8 @@ import { useAppContext } from '../context/AppContext'
 
 const suggestions = ['Summarize this sprint update', 'Draft a launch announcement', 'Explain this product strategy']
 
+const apiBase = import.meta.env.VITE_API_BASE_URL || '/api'
+
 export default function AIChatPage() {
   const { chats, addChatEntry, canUseTool, adminConfig, subscription, addFavorite } = useAppContext()
   const [prompt, setPrompt] = useState('')
@@ -31,7 +33,7 @@ export default function AIChatPage() {
     setLoading(true)
     setReply('')
     try {
-      const response = await fetch('/api/chat', {
+      const response = await fetch(`${apiBase}/chat`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ prompt }),

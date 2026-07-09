@@ -5,6 +5,8 @@ import BackgroundEffects from '../components/BackgroundEffects'
 import GlassPanel from '../components/GlassPanel'
 import { useAppContext } from '../context/AppContext'
 
+const apiBase = import.meta.env.VITE_API_BASE_URL || '/api'
+
 export default function CodePage() {
   const { addFavorite } = useAppContext()
   const [prompt, setPrompt] = useState('')
@@ -15,7 +17,7 @@ export default function CodePage() {
     if (!prompt.trim()) return
     setLoading(true)
     try {
-      const res = await fetch('/api/code', {
+      const res = await fetch(`${apiBase}/code`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ prompt }),

@@ -4,6 +4,8 @@ import { useState } from 'react'
 import BackgroundEffects from '../components/BackgroundEffects'
 import GlassPanel from '../components/GlassPanel'
 
+const apiBase = import.meta.env.VITE_API_BASE_URL || '/api'
+
 export default function PDFPage() {
   const [text, setText] = useState('')
   const [prompt, setPrompt] = useState('')
@@ -13,7 +15,7 @@ export default function PDFPage() {
   const handleGenerate = async () => {
     setLoading(true)
     try {
-      const res = await fetch('/api/pdf', {
+      const res = await fetch(`${apiBase}/pdf`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ text, prompt }),
