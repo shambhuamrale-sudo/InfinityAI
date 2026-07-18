@@ -1,11 +1,11 @@
 import { motion } from 'framer-motion'
-import { ArrowRight, Mail, Lock, UserRound, ShieldCheck, Bot, Wand2, Sparkles } from 'lucide-react'
+import { useState } from 'react'
+import { ArrowRight, Mail, Lock, UserRound, Eye, EyeOff, ShieldCheck, Bot, Wand2, Sparkles } from 'lucide-react'
 import BackgroundEffects from '../components/BackgroundEffects'
 import GlassPanel from '../components/GlassPanel'
 import PremiumButton from '../components/PremiumButton'
 import InfinityLogo from '../components/InfinityLogo'
 import { useAppContext } from '../context/useAppContext'
-import { useState } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 
 export default function AuthPage({ type = 'login' }) {
@@ -14,6 +14,7 @@ export default function AuthPage({ type = 'login' }) {
   const navigate = useNavigate()
   const [form, setForm] = useState({ name: '', email: '', password: '' })
   const [submitting, setSubmitting] = useState(false)
+  const [showPassword, setShowPassword] = useState(false)
 
   const handleSubmit = async (event) => {
     event.preventDefault()
@@ -23,7 +24,9 @@ export default function AuthPage({ type = 'login' }) {
       if (result.success) navigate('/dashboard')
     } else {
       const result = await signup(form.name, form.email, form.password)
-      if (result.success) navigate('/dashboard')
+      if (result.success) {
+        navigate('/verify-email', { state: { email: form.email } })
+      }
     }
     setSubmitting(false)
   }
@@ -78,8 +81,16 @@ export default function AuthPage({ type = 'login' }) {
                 </label>
                 <label className="flex items-center gap-3 rounded-2xl border border-white/8 bg-white/[0.04] px-4 py-3 transition focus-within:border-indigo-400/40">
                   <Lock className="h-5 w-5 text-indigo-300" />
-                  <input type="password" value={form.password} onChange={(event) => setForm({ ...form, password: event.target.value })} className="w-full bg-transparent text-sm text-white outline-none" placeholder="Password" required minLength={6} />
+                  <input type={showPassword ? 'text' : 'password'} value={form.password} onChange={(event) => setForm({ ...form, password: event.target.value })} className="w-full bg-transparent text-sm text-white outline-none" placeholder="Password" required minLength={6} />
+                  <button type="button" onClick={() => setShowPassword(!showPassword)} className="text-slate-400 hover:text-white" aria-label={showPassword ? 'Hide password' : 'Show password'}>
+                    {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+                  </button>
                 </label>
+                {isLogin && (
+                  <div className="text-right">
+                    <Link to="/forgot-password" className="text-sm font-medium text-indigo-300 hover:text-indigo-200">Forgot password?</Link>
+                  </div>
+                )}
                 <PremiumButton className="mt-8 w-full" type="submit" disabled={submitting}>{submitting ? (isLogin ? 'Signing in...' : 'Creating account...') : (isLogin ? 'Sign in' : 'Create account')} <ArrowRight className="h-4 w-4" /></PremiumButton>
               </form>
 

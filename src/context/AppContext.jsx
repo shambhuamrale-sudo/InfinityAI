@@ -367,8 +367,93 @@ export function AppProvider({ children }) {
     }
     setAuth({ user: data.user, isAuthenticated: true, loading: false })
     setState((prev) => ({ ...prev, user: { ...prev.user, ...data.user } }))
-    addToast({ kind: 'success', title: 'Account created', message: 'Welcome to InfinityAI.' })
+    addToast({ kind: 'success', title: 'Account created', message: 'Welcome to InfinityAI. Please verify your email.' })
     return { success: true, user: data.user }
+  }
+
+  const forgotPassword = async (email) => {
+    const apiBase = import.meta.env.VITE_API_BASE_URL || ''
+    const response = await fetch(`${apiBase}/api/auth/forgot-password`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email }),
+      credentials: 'include'
+    })
+    const data = await response.json()
+    if (!response.ok) {
+      const error = data.error || 'Failed to send OTP'
+      return { success: false, error }
+    }
+    addToast({ kind: 'success', title: 'OTP sent', message: 'Check your email for the reset code.' })
+    return { success: true }
+  }
+
+  const verifyResetOtp = async (email, otp) => {
+    const apiBase = import.meta.env.VITE_API_BASE_URL || ''
+    const response = await fetch(`${apiBase}/api/auth/verify-reset-otp`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, otp }),
+      credentials: 'include'
+    })
+    const data = await response.json()
+    if (!response.ok) {
+      const error = data.error || 'Invalid OTP'
+      return { success: false, error }
+    }
+    return { success: true }
+  }
+
+  const resetPassword = async (email, otp, password) => {
+    const apiBase = import.meta.env.VITE_API_BASE_URL || ''
+    const response = await fetch(`${apiBase}/api/auth/reset-password`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, otp, password }),
+      credentials: 'include'
+    })
+    const data = await response.json()
+    if (!response.ok) {
+      const error = data.error || 'Failed to reset password'
+      return { success: false, error }
+    }
+    addToast({ kind: 'success', title: 'Password reset', message: 'You can now log in with your new password.' })
+    return { success: true }
+  }
+
+  const verifyEmail = async (email, otp) => {
+    const apiBase = import.meta.env.VITE_API_BASE_URL || ''
+    const response = await fetch(`${apiBase}/api/auth/verify-email`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, otp }),
+      credentials: 'include'
+    })
+    const data = await response.json()
+    if (!response.ok) {
+      const error = data.error || data.message || 'Verification failed'
+      return { success: false, error }
+    }
+    setAuth((prev) => ({ ...prev, user: { ...prev.user, isVerified: true } }))
+    addToast({ kind: 'success', title: 'Email verified', message: 'Your account is now active.' })
+    return { success: true }
+  }
+
+  const resendOtp = async (email) => {
+    const apiBase = import.meta.env.VITE_API_BASE_URL || ''
+    const response = await fetch(`${apiBase}/api/auth/resend-otp`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email }),
+      credentials: 'include'
+    })
+    const data = await response.json()
+    if (!response.ok) {
+      const error = data.error || 'Failed to resend OTP'
+      return { success: false, error }
+    }
+    addToast({ kind: 'success', title: 'OTP resent', message: 'Check your email for the new code.' })
+    return { success: true }
   }
 
   const logout = async () => {
@@ -385,6 +470,11 @@ export function AppProvider({ children }) {
     login,
     signup,
     logout,
+    forgotPassword,
+    verifyResetOtp,
+    resetPassword,
+    verifyEmail,
+    resendOtp,
     canUseTool,
     addChatEntry,
     addConversation,
