@@ -12,8 +12,8 @@ export function AppProvider({ children }) {
   useEffect(() => {
     const hydrateAuth = async () => {
       try {
-        const apiBase = import.meta.env.VITE_API_BASE_URL || '/api'
-        const response = await fetch(`${apiBase}/auth/me`, { credentials: 'include' })
+        const apiBase = import.meta.env.VITE_API_BASE_URL || ''
+        const response = await fetch(`${apiBase}/api/auth/me`, { credentials: 'include' })
         if (response.ok) {
           const data = await response.json()
           setAuth({ user: data.user || null, isAuthenticated: true, loading: false })
@@ -44,11 +44,11 @@ export function AppProvider({ children }) {
       }
 
       try {
-        const apiBase = import.meta.env.VITE_API_BASE_URL || '/api'
+        const apiBase = import.meta.env.VITE_API_BASE_URL || ''
         const [plansRes, configRes, serverStateRes] = await Promise.all([
-          fetch(`${apiBase}/plans`),
-          fetch(`${apiBase}/config`),
-          fetch(`${apiBase}/state`)
+          fetch(`${apiBase}/api/plans`),
+          fetch(`${apiBase}/api/config`),
+          fetch(`${apiBase}/api/state`)
         ])
         if (plansRes.ok) {
           const plans = await plansRes.json()
@@ -77,9 +77,9 @@ export function AppProvider({ children }) {
     let timeoutId
     const persistState = { ...state, toasts: [] }
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(persistState))
-    const apiBase = import.meta.env.VITE_API_BASE_URL || '/api'
+    const apiBase = import.meta.env.VITE_API_BASE_URL || ''
     timeoutId = window.setTimeout(() => {
-      fetch(`${apiBase}/state`, {
+      fetch(`${apiBase}/api/state`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(persistState)
@@ -332,8 +332,8 @@ export function AppProvider({ children }) {
   }
 
   const login = async (email, password) => {
-    const apiBase = import.meta.env.VITE_API_BASE_URL || '/api'
-    const response = await fetch(`${apiBase}/auth/login`, {
+    const apiBase = import.meta.env.VITE_API_BASE_URL || ''
+    const response = await fetch(`${apiBase}/api/auth/login`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email, password }),
@@ -352,8 +352,8 @@ export function AppProvider({ children }) {
   }
 
   const signup = async (name, email, password) => {
-    const apiBase = import.meta.env.VITE_API_BASE_URL || '/api'
-    const response = await fetch(`${apiBase}/auth/signup`, {
+    const apiBase = import.meta.env.VITE_API_BASE_URL || ''
+    const response = await fetch(`${apiBase}/api/auth/signup`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ name, email, password }),
@@ -372,8 +372,8 @@ export function AppProvider({ children }) {
   }
 
   const logout = async () => {
-    const apiBase = import.meta.env.VITE_API_BASE_URL || '/api'
-    await fetch(`${apiBase}/auth/logout`, { method: 'POST', credentials: 'include' }).catch(() => {})
+    const apiBase = import.meta.env.VITE_API_BASE_URL || ''
+    await fetch(`${apiBase}/api/auth/logout`, { method: 'POST', credentials: 'include' }).catch(() => {})
     setAuth({ user: null, isAuthenticated: false, loading: false })
     setState((prev) => ({ ...prev, user: createDefaultState().user }))
     addToast({ kind: 'info', title: 'Signed out', message: 'You have been logged out securely.' })
