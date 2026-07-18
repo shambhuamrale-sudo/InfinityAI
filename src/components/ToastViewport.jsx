@@ -1,6 +1,6 @@
 import { AnimatePresence, motion } from 'framer-motion'
 import { AlertCircle, CheckCircle2, Info } from 'lucide-react'
-import { useAppContext } from '../context/AppContext'
+import { useAppContext } from '../context/useAppContext'
 
 const iconMap = {
   success: CheckCircle2,
@@ -17,7 +17,7 @@ export default function ToastViewport() {
         {toasts.map((toast) => {
           const Icon = iconMap[toast.kind] || Info
           return (
-            <motion.div key={toast.id} initial={{ opacity: 0, y: -8, scale: 0.98 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: -8, scale: 0.98 }} className="rounded-[1.2rem] border border-white/10 bg-[#0B1120]/95 p-4 shadow-[0_20px_100px_rgba(2,6,23,0.55)] backdrop-blur-2xl">
+            <motion.div key={toast.id} initial={{ opacity: 0, y: -8, scale: 0.98 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: -8, scale: 0.98 }} className="glass rounded-[1.2rem] p-4">
               <div className="flex items-start gap-3">
                 <div className={`rounded-2xl border p-2 ${toast.kind === 'success' ? 'border-emerald-400/20 bg-emerald-400/10 text-emerald-300' : toast.kind === 'error' ? 'border-rose-400/20 bg-rose-400/10 text-rose-300' : 'border-cyan-400/20 bg-cyan-400/10 text-cyan-300'}`}>
                   <Icon className="h-4 w-4" />

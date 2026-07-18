@@ -1,9 +1,9 @@
 import { motion } from 'framer-motion'
 import { Clock3, Sparkles } from 'lucide-react'
 
-export default function ActivityFeed({ activity, isDark }) {
-  const soft = isDark ? 'border-white/10 bg-white/[0.04]' : 'border-slate-200 bg-white/70'
-  const muted = isDark ? 'text-slate-400' : 'text-slate-500'
+export default function ActivityFeed({ activity }) {
+  const soft = 'glass'
+  const muted = 'text-slate-400'
   const items = (activity && activity.length)
     ? activity.slice(0, 6)
     : [

@@ -5,7 +5,7 @@ import {
   MessageSquareText, ImagePlus, FileText, DatabaseZap, Zap, Briefcase,
   ArrowRight, Sparkles, Crown, Clock3
 } from 'lucide-react'
-import { useAppContext } from '../context/AppContext'
+import { useAppContext } from '../context/useAppContext'
 import usePrefersReducedMotion from '../hooks/usePrefersReducedMotion'
 import BackgroundEffects from '../components/BackgroundEffects'
 import DashboardSidebar from '../components/dashboard/DashboardSidebar'
@@ -30,7 +30,7 @@ const STAT_ACCENTS = [
 
 export default function DashboardPage() {
   const navigate = useNavigate()
-  const { user, subscription, usage, adminConfig, preferences, chats, images, favorites, activity } = useAppContext()
+  const { user, subscription, usage, adminConfig, chats, images, favorites, activity } = useAppContext()
   const [collapsed, setCollapsed] = useState(false)
   const reduced = usePrefersReducedMotion()
   const [introDone, setIntroDone] = useState(() => {
@@ -43,7 +43,7 @@ export default function DashboardPage() {
     setIntroDone(true)
   }
 
-  const isDark = preferences?.darkMode !== false
+  const isDark = true
   const planLabel = subscription?.plan || 'free-trial'
   const planName = planLabel.replace(/-/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())
   const remainingTrialDays = Math.max(0, Math.ceil(((subscription?.expiresAt || Date.now()) - Date.now()) / 86400000))
@@ -62,9 +62,9 @@ export default function DashboardPage() {
   const recentImages = (images || []).slice(0, 4)
   const ready = introDone
 
-  const shell = isDark ? 'bg-[#050816] text-white' : 'bg-slate-50 text-slate-900'
-  const panel = isDark ? 'border-white/10 bg-white/[0.04]' : 'border-slate-200 bg-white/70'
-  const muted = isDark ? 'text-slate-400' : 'text-slate-500'
+  const shell = 'app-canvas text-white'
+  const panel = 'glass'
+  const muted = 'text-slate-400'
 
   return (
     <div className={`relative flex min-h-screen ${shell} overflow-hidden`}>
@@ -211,7 +211,7 @@ export default function DashboardPage() {
           </section>
 
           <footer className={`flex items-center gap-2 pt-2 text-xs ${muted}`}>
-            <Clock3 className="h-3.5 w-3.5" /> Workspace synced · Aditya AI — Endless AI Possibilities
+            <Clock3 className="h-3.5 w-3.5" /> Workspace synced · InfinityAI — Endless AI Possibilities
           </footer>
         </div>
       </motion.main>

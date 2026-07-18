@@ -5,11 +5,13 @@ import cors from 'cors'
 import cookieParser from 'cookie-parser'
 import helmet from 'helmet'
 import rateLimit from 'express-rate-limit'
+import multer from 'multer'
 import dotenv from 'dotenv'
 import bcrypt from 'bcryptjs'
 import jwt from 'jsonwebtoken'
 import { z } from 'zod'
 import { MongoClient, ObjectId } from 'mongodb'
+import { providerManager, imageProviderManager } from './providers/index.js'
 
 dotenv.config()
 
@@ -34,6 +36,8 @@ app.use(helmet({ crossOriginResourcePolicy: false }))
 app.use(cors(allowedOrigins.length ? { origin: allowedOrigins, credentials: true } : { origin: true, credentials: true }))
 app.use(cookieParser())
 app.use(express.json({ limit: '1mb' }))
+
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 20 * 1024 * 1024 } })
 
 const SALT_ROUNDS = Number(process.env.AUTH_SALT_ROUNDS || 12)
 const JWT_SECRET = process.env.JWT_SECRET || 'aditya-ai-jwt-secret-change-in-production'
@@ -64,7 +68,7 @@ const defaultAdminConfig = {
   },
   storageLimit: 100,
   providerStatuses: { ollama: 'healthy', comfyui: 'healthy', openrouter: 'healthy' },
-  providerConfig: { chatProvider: 'ollama', imageProvider: 'comfyui', writerProvider: 'backend', codeProvider: 'backend', pdfProvider: 'backend', translateProvider: 'backend' },
+    providerConfig: { chatProvider: 'ollama', imageProvider: 'local', writerProvider: 'backend', codeProvider: 'backend', pdfProvider: 'backend', translateProvider: 'backend' },
   analytics: { totalUsers: 1284, activeUsers: 812, conversionRate: '8.4%' }
 }
 
@@ -96,6 +100,7 @@ const defaultState = {
   },
   adminConfig: defaultAdminConfig,
   chats: [],
+  conversations: [],
   images: [],
   favorites: [],
   notifications: [],
@@ -311,23 +316,6 @@ async function callOllama(prompt, model) {
   return { text: buildFallbackText('chat', prompt), provider: 'fallback', usedFallback: true }
 }
 
-async function callComfyUI(prompt) {
-  const base = process.env.COMFYUI_URL || 'http://127.0.0.1:8188'
-  try {
-    const response = await fetch(`${base}/prompt`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ prompt, workflow: 'default' })
-    })
-    if (!response.ok) throw new Error(`ComfyUI responded with ${response.status}`)
-    const data = await response.json()
-    return { text: `Image generation queued successfully for ${prompt}.`, provider: 'comfyui', usedFallback: false, payload: data }
-  } catch (error) {
-    console.warn('ComfyUI unavailable, using fallback response:', error.message)
-  }
-  return { text: `Generated concept for: ${prompt}`, provider: 'fallback', usedFallback: true }
-}
-
 app.get('/api/health', (_req, res) => {
   res.json({ ok: true, message: 'Aditya AI API is running' })
 })
@@ -387,6 +375,118 @@ app.use('/api', async (req, res, next) => {
   next()
 })
 
+app.get('/api/conversations', async (req, res) => {
+  const state = await loadState()
+  const conversations = (state.conversations || []).map((c) => ({
+    ...c,
+    messages: c.messages ? c.messages.map((m) => ({ role: m.role, content: m.content, timestamp: m.timestamp })) : []
+  }))
+  res.json({ conversations })
+})
+
+app.get('/api/conversations/:id', async (req, res) => {
+  const state = await loadState()
+  const conversation = (state.conversations || []).find((c) => c.id === req.params.id)
+  if (!conversation) return res.status(404).json({ error: 'Conversation not found' })
+  res.json({ conversation })
+})
+
+app.post('/api/conversations', async (req, res) => {
+  const state = await loadState()
+  const conversation = {
+    id: `conv_${Date.now()}`,
+    title: req.body?.title || 'New conversation',
+    messages: req.body?.messages || [],
+    provider: req.body?.provider || state.adminConfig.providerConfig?.chatProvider || 'ollama',
+    model: req.body?.model || state.adminConfig.providerConfig?.chatModel || process.env.OLLAMA_MODEL || 'llama3.2',
+    pinned: false,
+    archived: false,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString()
+  }
+  const nextState = await saveState({ ...state, conversations: [conversation, ...(state.conversations || [])] })
+  res.json({ conversation, conversations: nextState.conversations })
+})
+
+app.put('/api/conversations/:id', async (req, res) => {
+  const state = await loadState()
+  const conversations = state.conversations || []
+  const index = conversations.findIndex((c) => c.id === req.params.id)
+  if (index === -1) return res.status(404).json({ error: 'Conversation not found' })
+  const updated = { ...conversations[index], ...req.body, updatedAt: new Date().toISOString() }
+  conversations[index] = updated
+  const nextState = await saveState({ ...state, conversations: [...conversations] })
+  res.json({ conversation: updated, conversations: nextState.conversations })
+})
+
+app.delete('/api/conversations/:id', async (req, res) => {
+  const state = await loadState()
+  const nextConversations = (state.conversations || []).filter((c) => c.id !== req.params.id)
+  const nextState = await saveState({ ...state, conversations: nextConversations })
+  res.json({ conversations: nextState.conversations })
+})
+
+app.post('/api/conversations/:id/duplicate', async (req, res) => {
+  const state = await loadState()
+  const source = (state.conversations || []).find((c) => c.id === req.params.id)
+  if (!source) return res.status(404).json({ error: 'Conversation not found' })
+  const duplicate = {
+    ...source,
+    id: `conv_${Date.now()}`,
+    title: `${source.title} (copy)`,
+    pinned: false,
+    archived: false,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString()
+  }
+  const nextState = await saveState({ ...state, conversations: [duplicate, ...(state.conversations || [])] })
+  res.json({ conversation: duplicate, conversations: nextState.conversations })
+})
+
+app.post('/api/chat/upload', upload.single('file'), async (req, res) => {
+  if (!req.file) return res.status(400).json({ error: 'No file uploaded' })
+  const allowedTypes = ['application/pdf', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'text/plain', 'image/png', 'image/jpeg', 'image/gif', 'image/webp']
+  if (!allowedTypes.includes(req.file.mimetype)) {
+    return res.status(400).json({ error: 'Unsupported file type' })
+  }
+  const base64 = req.file.buffer.toString('base64')
+  const attachment = {
+    id: `att_${Date.now()}`,
+    name: req.file.originalname,
+    type: req.file.mimetype,
+    size: req.file.size,
+    data: base64,
+    createdAt: new Date().toISOString()
+  }
+  res.json({ attachment })
+})
+
+app.get('/api/conversations/:id/export', async (req, res) => {
+  const state = await loadState()
+  const conversation = (state.conversations || []).find((c) => c.id === req.params.id)
+  if (!conversation) return res.status(404).json({ error: 'Conversation not found' })
+  const format = req.query.format || 'md'
+  let content = ''
+  let contentType = 'text/plain'
+  let extension = 'txt'
+  if (format === 'md') {
+    content = conversation.messages.map((m) => `## ${m.role === 'user' ? 'You' : 'Assistant'}\n\n${m.content}`).join('\n\n---\n\n')
+    contentType = 'text/markdown'
+    extension = 'md'
+  } else if (format === 'html') {
+    content = `<!DOCTYPE html><html><head><title>${conversation.title}</title><style>body{font-family:system-ui,sans-serif;max-width:800px;margin:0 auto;padding:2rem;color:#1a1a1a;background:#f8fafc}pre{background:#f1f5f9;padding:1rem;border-radius:0.5rem;overflow-x:auto}code{font-family:monospace}blockquote{border-left:4px solid #6366f1;padding-left:1rem;color:#4b5563}</style></head><body><h1>${conversation.title}</h1>${conversation.messages.map((m) => `<h2>${m.role === 'user' ? 'You' : 'Assistant'}</h2><div>${m.content.replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/```([\s\S]*?)```/g, '<pre><code>$1</code></pre>').replace(/`([^`]+)`/g, '<code>$1</code>').replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>').replace(/^#+\s+(.*)$/gm, '<h3>$1</h3>').replace(/^>\s+(.*)$/gm, '<blockquote>$1</blockquote>').replace(/^-\s+(.*)$/gm, '<li>$1</li>').replace(/\n/g, '<br>')}</div>`).join('<hr>')}</body></html>`
+    contentType = 'text/html'
+    extension = 'html'
+  } else if (format === 'pdf') {
+    content = conversation.messages.map((m) => `${m.role === 'user' ? 'You' : 'Assistant'}:\n\n${m.content}`).join('\n\n---\n\n')
+    contentType = 'text/plain'
+    extension = 'txt'
+  }
+  res.setHeader('Content-Type', contentType)
+  res.setHeader('Content-Disposition', `attachment; filename="${conversation.title.replace(/[^a-z0-9]/gi, '_')}.${extension}"`)
+  res.send(content)
+})
+
 app.get('/api/config', async (_req, res) => {
   const state = await loadState()
   res.json(state.adminConfig)
@@ -414,19 +514,174 @@ app.post('/api/admin/config', async (req, res) => {
 
 app.post('/api/chat', async (req, res) => {
   const prompt = req.body?.prompt || ''
+  const messages = Array.isArray(req.body?.messages) ? req.body.messages : undefined
   const state = await loadState()
   const provider = req.body?.provider || state.adminConfig.providerConfig?.chatProvider || 'ollama'
   const model = req.body?.model || state.adminConfig.providerConfig?.chatModel || process.env.OLLAMA_MODEL || 'llama3.2'
-  const result = provider === 'ollama' ? await callOllama(prompt, model) : { text: buildFallbackText('chat', prompt), provider, usedFallback: true }
+  const stream = Boolean(req.body?.stream)
+  if (stream) {
+    res.setHeader('Content-Type', 'text/event-stream')
+    res.setHeader('Cache-Control', 'no-cache')
+    res.setHeader('Connection', 'keep-alive')
+    res.flushHeaders?.()
+    try {
+      const selected = providerManager.select(provider)
+      if (selected && selected.streamChat) {
+        await selected.streamChat({ prompt, model, messages }, (chunk) => {
+          res.write(`data: ${JSON.stringify({ text: chunk })}\n\n`)
+        })
+      } else {
+        const result = await providerManager.chat({ provider, prompt, model, messages })
+        res.write(`data: ${JSON.stringify({ text: result.text })}\n\n`)
+      }
+    } catch (error) {
+      res.write(`data: ${JSON.stringify({ error: error.message })}\n\n`)
+    }
+    res.write('data: [DONE]\n\n')
+    return res.end()
+  }
+  const result = await providerManager.chat({ provider, prompt, model, messages })
   res.json(result)
 })
 
-app.post('/api/image', async (req, res) => {
-  const prompt = req.body?.prompt || ''
-  const state = await loadState()
-  const provider = req.body?.provider || state.adminConfig.providerConfig?.imageProvider || 'comfyui'
-  const result = provider === 'comfyui' ? await callComfyUI(prompt) : { text: buildFallbackText('image', prompt), provider, usedFallback: true }
+// ── Provider system (Phase 2) — additive, read-only discovery endpoints ──────
+
+// List providers with static capability descriptors.
+app.get('/api/providers', (_req, res) => {
+  res.json({ providers: providerManager.listProviders(), default: providerManager.defaultProviderId })
+})
+
+// List providers together with their model catalogs (may probe local Ollama).
+app.get('/api/providers/models', async (_req, res) => {
+  try {
+    const providers = await providerManager.listProvidersWithModels()
+    res.json({ providers })
+  } catch (error) {
+    console.warn('Failed to list provider models:', error.message)
+    res.json({ providers: providerManager.listProviders() })
+  }
+})
+
+// Runtime availability for all providers (or ?id=xxx for one).
+app.get('/api/providers/availability', async (req, res) => {
+  const id = typeof req.query?.id === 'string' ? req.query.id : undefined
+  const availability = await providerManager.checkAvailability(id)
+  res.json({ availability })
+})
+
+// Capabilities for all providers (or ?id=xxx for one).
+app.get('/api/providers/capabilities', (req, res) => {
+  const id = typeof req.query?.id === 'string' ? req.query.id : undefined
+  res.json({ capabilities: providerManager.getCapabilities(id) })
+})
+
+// Validate an API key for a provider (admin-only; never echoes the key back).
+app.post('/api/providers/validate', async (req, res) => {
+  const user = req.user
+  if (!user || user.role !== 'admin') {
+    return res.status(403).json({ error: 'Admin access required' })
+  }
+  const id = req.body?.provider
+  if (!id || !providerManager.has(id)) {
+    return res.status(400).json({ error: 'Unknown provider' })
+  }
+  const result = await providerManager.validateApiKey(id, req.body?.apiKey)
   res.json(result)
+})
+
+function sanitizeImageParams(body = {}) {
+  const clamp = (value, min, max, fallback) => {
+    const n = Number(value)
+    if (!Number.isFinite(n)) return fallback
+    return Math.min(Math.max(n, min), max)
+  }
+  const params = {
+    prompt: typeof body.prompt === 'string' ? body.prompt.slice(0, 2000) : '',
+    negativePrompt: typeof body.negativePrompt === 'string' ? body.negativePrompt.slice(0, 2000) : '',
+    width: clamp(body.width, 128, 2048, 768),
+    height: clamp(body.height, 128, 2048, 768),
+    steps: clamp(body.steps, 1, 150, 30),
+    guidanceScale: clamp(body.guidanceScale, 0, 30, 7),
+    batchSize: clamp(body.batchSize, 1, 8, 1),
+    model: typeof body.model === 'string' ? body.model : undefined
+  }
+  if (body.seed !== undefined && body.seed !== null && `${body.seed}` !== '') {
+    const seed = Number(body.seed)
+    if (Number.isFinite(seed) && seed >= 0) params.seed = Math.floor(seed)
+  }
+  return params
+}
+
+// Text-to-image generation. Backward compatible: still returns `text`, and now
+// also returns a normalized `images` array plus generation metadata.
+app.post('/api/image', async (req, res) => {
+  const state = await loadState()
+  const provider = req.body?.provider || state.adminConfig.providerConfig?.imageProvider || imageProviderManager.defaultProviderId
+  const params = sanitizeImageParams(req.body)
+  const result = await imageProviderManager.generate({ provider, ...params })
+  // Keep a human-readable `text` field for legacy consumers.
+  if (!result.text) result.text = `Generated image for: ${params.prompt || 'your prompt'}`
+  res.json(result)
+})
+
+// Image editing operations: image-to-image, upscale, background removal, face
+// restoration, inpainting, outpainting, crop/resize.
+app.post('/api/image/edit', async (req, res) => {
+  const state = await loadState()
+  const provider = req.body?.provider || state.adminConfig.providerConfig?.imageProvider || imageProviderManager.defaultProviderId
+  const validOps = ['image-to-image', 'inpaint', 'outpaint', 'upscale', 'background-removal', 'face-restoration', 'crop-resize']
+  const operation = validOps.includes(req.body?.operation) ? req.body.operation : 'image-to-image'
+  const params = sanitizeImageParams(req.body)
+  const image = typeof req.body?.image === 'string' ? req.body.image : undefined
+  const denoisingStrength = Number.isFinite(Number(req.body?.denoisingStrength)) ? Number(req.body.denoisingStrength) : 0.6
+  const result = await imageProviderManager.edit({ provider, operation, image, denoisingStrength, ...params })
+  res.json(result)
+})
+
+// Image provider discovery (mirrors /api/providers for chat).
+app.get('/api/image/providers', (_req, res) => {
+  res.json({ providers: imageProviderManager.listProviders(), default: imageProviderManager.defaultProviderId })
+})
+
+app.get('/api/image/providers/models', async (_req, res) => {
+  try {
+    const providers = await imageProviderManager.listProvidersWithModels()
+    res.json({ providers })
+  } catch (error) {
+    console.warn('Failed to list image provider models:', error.message)
+    res.json({ providers: imageProviderManager.listProviders() })
+  }
+})
+
+app.get('/api/image/providers/availability', async (req, res) => {
+  const id = typeof req.query?.id === 'string' ? req.query.id : undefined
+  const availability = await imageProviderManager.checkAvailability(id)
+  res.json({ availability })
+})
+
+app.get('/api/image/providers/capabilities', (req, res) => {
+  const id = typeof req.query?.id === 'string' ? req.query.id : undefined
+  res.json({ capabilities: imageProviderManager.getCapabilities(id) })
+})
+
+// Validate an image provider API key (admin-only; never echoes the key back).
+app.post('/api/image/providers/validate', async (req, res) => {
+  const user = req.user
+  if (!user || user.role !== 'admin') {
+    return res.status(403).json({ error: 'Admin access required' })
+  }
+  const id = req.body?.provider
+  if (!id || !imageProviderManager.has(id)) {
+    return res.status(400).json({ error: 'Unknown provider' })
+  }
+  const result = await imageProviderManager.validateApiKey(id, req.body?.apiKey)
+  res.json(result)
+})
+
+// Random prompt generator for the studio.
+app.get('/api/image/random-prompt', (req, res) => {
+  const seed = Number(req.query?.seed)
+  res.json({ prompt: imageProviderManager.randomPrompt(Number.isFinite(seed) ? seed : undefined) })
 })
 
 app.post('/api/writer', async (req, res) => {

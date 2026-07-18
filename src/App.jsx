@@ -38,7 +38,7 @@ import UserMenu from './components/UserMenu'
 import ToastViewport from './components/ToastViewport'
 import PageLoader from './components/PageLoader'
 import ProviderStatusIndicator from './components/ProviderStatusIndicator'
-import { useAppContext } from './context/AppContext'
+import { useAppContext } from './context/useAppContext'
 
 function AppShell() {
   const location = useLocation()
@@ -85,11 +85,11 @@ function AppShell() {
       <ToastViewport />
       {isProtectedRoute && auth.isAuthenticated ? (
         <div className="fixed bottom-4 right-4 z-[80] flex flex-col items-end gap-3">
-          <div className="flex items-center gap-2 rounded-full border border-white/10 bg-[#0B1120]/80 px-3 py-2 text-sm text-slate-300 backdrop-blur-xl">
+          <div className="flex items-center gap-2 rounded-full border border-white/10 bg-[#0a0c14]/80 px-3 py-2 text-sm text-slate-300 backdrop-blur-xl">
             <ProviderStatusIndicator provider="ollama" status="healthy" className="border-0 bg-transparent px-0 py-0" />
             <ProviderStatusIndicator provider="comfyui" status="healthy" className="border-0 bg-transparent px-0 py-0" />
           </div>
-          <motion.button whileHover={{ scale: 1.03, y: -2 }} whileTap={{ scale: 0.97 }} onClick={() => setCommandPaletteOpen(true)} className="rounded-full bg-gradient-to-r from-indigo-500 via-violet-500 to-fuchsia-500 p-4 text-white shadow-[0_20px_80px_rgba(99,102,241,0.28)]">
+          <motion.button whileHover={{ scale: 1.03, y: -2 }} whileTap={{ scale: 0.97 }} onClick={() => setCommandPaletteOpen(true)} className="rounded-full brand-gradient p-4 text-white shadow-[0_16px_60px_-16px_rgba(129,140,248,0.7)]">
             <span className="text-lg font-semibold">＋</span>
           </motion.button>
         </div>

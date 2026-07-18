@@ -1,8 +1,9 @@
-import { motion } from 'framer-motion'
-import { FileText, Sparkles, Star } from 'lucide-react'
+import { FileText, Sparkles, Star, Copy, Check } from 'lucide-react'
 import { useState } from 'react'
 import BackgroundEffects from '../components/BackgroundEffects'
 import GlassPanel from '../components/GlassPanel'
+import ToolPageLayout from '../components/ToolPageLayout'
+import { useAppContext } from '../context/useAppContext'
 
 const apiBase = import.meta.env.VITE_API_BASE_URL || '/api'
 
@@ -11,6 +12,8 @@ export default function PDFPage() {
   const [prompt, setPrompt] = useState('')
   const [response, setResponse] = useState('')
   const [loading, setLoading] = useState(false)
+  const [copied, setCopied] = useState(false)
+  const { addFavorite } = useAppContext()
 
   const handleGenerate = async () => {
     setLoading(true)
@@ -28,35 +31,32 @@ export default function PDFPage() {
     }
   }
 
-  return (
-    <div className="relative min-h-screen overflow-hidden bg-[#050816] text-white">
-      <BackgroundEffects />
-      <div className="relative z-10 mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
-        <motion.header initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} className="rounded-[1.75rem] border border-white/10 bg-[#0B1120]/85 p-5 backdrop-blur-2xl">
-          <div className="flex items-center gap-3">
-            <div className="rounded-2xl border border-indigo-400/20 bg-indigo-500/10 p-2 text-indigo-300"><FileText className="h-5 w-5" /></div>
-            <div>
-              <p className="text-sm uppercase tracking-[0.35em] text-indigo-300">PDF</p>
-              <h1 className="mt-2 text-3xl font-semibold tracking-tight text-white">Transform knowledge into actionable documents.</h1>
-            </div>
-          </div>
-        </motion.header>
+  const copy = async () => {
+    try { await navigator.clipboard.writeText(response); setCopied(true); setTimeout(() => setCopied(false), 1400) } catch { /* noop */ }
+  }
 
-        <div className="mt-6 grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
-          <GlassPanel className="p-5">
-            <p className="text-sm uppercase tracking-[0.3em] text-slate-500">Upload & summarize</p>
-            <textarea value={text} onChange={(event) => setText(event.target.value)} className="mt-4 min-h-[180px] w-full rounded-[1.2rem] border border-white/10 bg-[#050816] p-4 text-sm text-white outline-none" placeholder="Paste document text or notes to analyze..." />
-            <input value={prompt} onChange={(event) => setPrompt(event.target.value)} className="mt-3 w-full rounded-[1.2rem] border border-white/10 bg-[#050816] px-4 py-3 text-sm text-white outline-none" placeholder="Summarize the document for me" />
-            <button onClick={handleGenerate} className="mt-4 rounded-full bg-gradient-to-r from-indigo-500 to-fuchsia-500 px-4 py-2 text-sm font-semibold text-white">Analyze PDF</button>
-            <button onClick={() => addFavorite({ id: 'pdf', label: 'PDF AI', path: '/pdf' })} className="mt-4 ml-2 rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm font-semibold text-white"><Star className="mr-1 inline h-4 w-4" /> Save</button>
-            <div className="mt-4 flex items-center gap-3 text-sm text-slate-500"><Sparkles className="h-4 w-4 text-indigo-300" /> {loading ? 'Analyzing...' : 'Send document text to the backend for summaries and actions.'}</div>
-          </GlassPanel>
-          <GlassPanel className="p-5">
+  return (
+    <ToolPageLayout icon={FileText} eyebrow="PDF" title="Transform knowledge into actionable documents.">
+      <BackgroundEffects />
+      <div className="grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
+        <GlassPanel className="p-5">
+          <p className="text-sm font-medium text-slate-400">Document & instruction</p>
+          <textarea value={text} onChange={(event) => setText(event.target.value)} className="mt-3 min-h-[180px] w-full resize-none rounded-[1.2rem] border border-white/8 bg-white/[0.03] p-4 text-sm text-white outline-none transition focus:border-indigo-400/40" placeholder="Paste document text or notes to analyze..." />
+          <input value={prompt} onChange={(event) => setPrompt(event.target.value)} className="mt-3 w-full rounded-[1.2rem] border border-white/8 bg-white/[0.03] px-4 py-3 text-sm text-white outline-none transition focus:border-indigo-400/40" placeholder="Summarize the document for me" />
+          <div className="mt-4 flex flex-wrap items-center gap-3">
+            <button onClick={handleGenerate} className="flex items-center gap-2 rounded-full brand-gradient px-5 py-3 text-sm font-semibold text-white shadow-[0_12px_40px_-12px_rgba(129,140,248,0.6)] transition hover:brightness-110"><Sparkles className="h-4 w-4" /> Analyze PDF</button>
+            <button onClick={() => addFavorite({ id: 'pdf', label: 'PDF AI', path: '/pdf' })} className="flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.04] px-4 py-3 text-sm font-semibold text-white transition hover:bg-white/10"><Star className="h-4 w-4" /> Save</button>
+            <span className="flex items-center gap-1.5 text-sm text-slate-500"><Sparkles className="h-4 w-4 text-indigo-300" /> {loading ? 'Analyzing…' : 'Send document text to the backend for summaries.'}</span>
+          </div>
+        </GlassPanel>
+        <GlassPanel className="flex flex-col p-5">
+          <div className="flex items-center justify-between">
             <p className="font-semibold text-white">Analysis output</p>
-            <div className="mt-4 whitespace-pre-line rounded-[1.1rem] border border-white/10 bg-white/5 p-3 text-sm text-slate-400">{response || 'Your analysis will appear here.'}</div>
-          </GlassPanel>
-        </div>
+            {response && <button onClick={copy} className="flex items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5 text-xs text-slate-300 transition hover:bg-white/10">{copied ? <><Check className="h-3.5 w-3.5 text-emerald-300" /> Copied</> : <><Copy className="h-3.5 w-3.5" /> Copy</>}</button>}
+          </div>
+          <div className="mt-4 flex-1 whitespace-pre-line rounded-[1.1rem] border border-white/8 bg-white/[0.03] p-4 text-sm leading-7 text-slate-300">{response || <span className="text-slate-500">Your analysis will appear here.</span>}</div>
+        </GlassPanel>
       </div>
-    </div>
+    </ToolPageLayout>
   )
 }

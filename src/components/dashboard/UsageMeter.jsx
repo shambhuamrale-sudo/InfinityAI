@@ -23,8 +23,8 @@ function Meter({ icon: Icon, label, used, max, accent, index }) {
   )
 }
 
-export default function UsageMeter({ usage, planLimits, storageLimit = 100, isDark }) {
-  const soft = isDark ? 'border-white/10 bg-white/[0.04]' : 'border-slate-200 bg-white/70'
+export default function UsageMeter({ usage, planLimits, storageLimit = 100 }) {
+  const soft = 'glass'
   const dayChats = usage?.dayChats || 0
   const dayImages = usage?.dayImages || 0
   const storageUsed = usage?.storageUsed || 0

@@ -262,7 +262,7 @@ export default function IntroExperience({ onComplete, reduced = false }) {
               transition={{ duration: 0.7, ease: 'easeOut' }}
               className="mt-6 text-center"
             >
-              <p className="text-2xl font-semibold tracking-[0.18em] text-white sm:text-3xl">Aditya AI</p>
+              <p className="text-2xl font-semibold tracking-[0.18em] text-white sm:text-3xl">InfinityAI</p>
               <p className="mt-2 text-xs uppercase tracking-[0.4em] text-indigo-300/80">Endless AI Possibilities</p>
             </motion.div>
           )}

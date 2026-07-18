@@ -1,22 +1,29 @@
 import { motion } from 'framer-motion'
+import InfinityLogo from './InfinityLogo'
 
 export default function PageLoader() {
   return (
-    <div className="flex min-h-screen items-center justify-center bg-[#050816] px-4 text-white">
-      <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="w-full max-w-xl rounded-[2rem] border border-white/10 bg-[#0B1120]/80 p-6 shadow-[0_30px_140px_rgba(2,6,23,0.5)] backdrop-blur-2xl">
-        <div className="flex items-center gap-3">
-          <div className="h-3 w-3 animate-pulse rounded-full bg-indigo-400" />
-          <div className="h-3 w-24 animate-pulse rounded-full bg-white/10" />
-        </div>
-        <div className="mt-6 space-y-3">
-          <div className="h-4 w-3/4 animate-pulse rounded-full bg-white/10" />
-          <div className="h-4 w-full animate-pulse rounded-full bg-white/10" />
-          <div className="h-4 w-5/6 animate-pulse rounded-full bg-white/10" />
-        </div>
-        <div className="mt-6 grid gap-3 md:grid-cols-3">
-          {Array.from({ length: 3 }).map((_, index) => (
-            <div key={index} className="h-24 animate-pulse rounded-[1.2rem] border border-white/10 bg-white/5" />
-          ))}
+    <div className="flex min-h-screen items-center justify-center app-canvas px-4 text-white">
+      <motion.div
+        initial={{ opacity: 0, y: 12 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="glass flex w-full max-w-xl flex-col items-center rounded-[2rem] px-8 py-12 text-center"
+      >
+        <motion.div
+          animate={{ rotate: 360 }}
+          transition={{ duration: 1.6, repeat: Infinity, ease: 'linear' }}
+          className="mb-7"
+        >
+          <InfinityLogo size={52} />
+        </motion.div>
+        <h2 className="text-base font-semibold tracking-tight text-white">Loading InfinityAI</h2>
+        <p className="mt-2 text-sm text-slate-400">Preparing your premium workspace…</p>
+        <div className="mt-8 h-1 w-44 overflow-hidden rounded-full bg-white/10">
+          <motion.div
+            className="h-full w-1/2 brand-gradient rounded-full"
+            animate={{ x: ['-100%', '220%'] }}
+            transition={{ duration: 1.3, repeat: Infinity, ease: 'easeInOut' }}
+          />
         </div>
       </motion.div>
     </div>

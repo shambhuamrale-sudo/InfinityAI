@@ -1,14 +1,14 @@
 import { motion } from 'framer-motion'
 import { Search, RadioTower, MoonStar, SunMedium, Bell, Sparkles } from 'lucide-react'
-import { useAppContext } from '../../context/AppContext'
+import { useAppContext } from '../../context/useAppContext'
 
 export default function DashboardTopbar({ title, subtitle, isDark }) {
   const { adminConfig, preferences, updatePreferences, setCommandPaletteOpen, setNotificationsOpen, notifications } = useAppContext()
   const provider = adminConfig?.providerConfig?.chatProvider || 'ollama'
   const unread = (notifications || []).filter((n) => n.unread).length
-  const muted = isDark ? 'text-slate-400' : 'text-slate-500'
-  const soft = isDark ? 'bg-white/5 border-white/10' : 'bg-slate-100 border-slate-200'
-  const inputCls = isDark ? 'bg-white/5 text-white placeholder:text-slate-500' : 'bg-slate-100 text-slate-900 placeholder:text-slate-400'
+  const muted = 'text-slate-400'
+  const soft = 'bg-white/[0.04] border-white/10'
+  const inputCls = 'bg-white/[0.04] text-white placeholder:text-slate-500'
 
   return (
     <motion.header

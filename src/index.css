@@ -1,15 +1,31 @@
 @import 'tailwindcss';
 
 :root {
-  font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   line-height: 1.5;
   font-weight: 400;
   color: #ffffff;
-  background-color: #050816;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+
+  --bg: #05060a;
+  --bg-soft: #0a0c14;
+  --surface: rgba(255, 255, 255, 0.04);
+  --surface-strong: rgba(255, 255, 255, 0.06);
+  --border: rgba(255, 255, 255, 0.08);
+  --border-strong: rgba(255, 255, 255, 0.12);
+  --text: #f4f5fb;
+  --text-muted: #9aa1b4;
+  --text-faint: #6b7186;
+  --brand: #818cf8;
+  --brand-2: #a855f7;
+  --brand-3: #e879f9;
+  --ring: rgba(129, 140, 248, 0.35);
+  --surface-deep: #0a0c14;
+  --surface-navy: #0b1120;
+  --surface-panel: #07101f;
 }
 
 * {
@@ -24,7 +40,9 @@ body {
   margin: 0;
   min-width: 320px;
   min-height: 100vh;
-  background: linear-gradient(135deg, #050816 0%, #0b1120 45%, #050816 100%);
+  background: var(--bg);
+  color: var(--text);
+  letter-spacing: -0.011em;
 }
 
 #root {
@@ -37,11 +55,108 @@ a {
 }
 
 button,
-input {
+input,
+textarea,
+select {
   font: inherit;
 }
 
 ::selection {
-  background: rgba(99, 102, 241, 0.35);
+  background: var(--ring);
   color: white;
+}
+
+/* Thin, premium scrollbars */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.14) transparent;
+}
+*::-webkit-scrollbar {
+  width: 9px;
+  height: 9px;
+}
+*::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.14);
+  border-radius: 999px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+*::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.24);
+  background-clip: content-box;
+}
+
+/* App-wide base gradient canvas */
+.app-canvas {
+  background:
+    radial-gradient(1200px 600px at 12% -10%, rgba(129, 140, 248, 0.16), transparent 55%),
+    radial-gradient(1000px 520px at 100% 0%, rgba(168, 85, 247, 0.14), transparent 50%),
+    radial-gradient(900px 600px at 50% 120%, rgba(232, 121, 249, 0.08), transparent 60%),
+    var(--bg);
+}
+
+/* Reusable premium utilities */
+.glass {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.02));
+  border: 1px solid var(--border);
+  -webkit-backdrop-filter: blur(24px);
+  backdrop-filter: blur(24px);
+  box-shadow: 0 1px 0 0 rgba(255, 255, 255, 0.04) inset, 0 24px 70px -30px rgba(0, 0, 0, 0.8);
+}
+
+.glass-soft {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--border);
+  -webkit-backdrop-filter: blur(16px);
+  backdrop-filter: blur(16px);
+}
+
+.hairline {
+  border: 1px solid var(--border);
+}
+
+.text-gradient {
+  background: linear-gradient(90deg, #c7d2fe 0%, #e9d5ff 45%, #fbcfe8 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.eyebrow {
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.28em;
+  text-transform: uppercase;
+  color: var(--brand);
+}
+
+.brand-gradient {
+  background: linear-gradient(135deg, #818cf8 0%, #a855f7 50%, #e879f9 100%);
+}
+
+/* Focus ring */
+.focus-ring:focus-visible,
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible,
+[role="button"]:focus-visible,
+[tabindex]:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+
+/* Reusable deep surface tokens (consolidated from scattered hex values) */
+.surface-deep { background: var(--surface-deep); }
+.surface-navy { background: var(--surface-navy); }
+.surface-panel { background: var(--surface-panel); }
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
 }

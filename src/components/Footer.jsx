@@ -1,79 +1,75 @@
-import { ArrowRight, Mail, Sparkles } from 'lucide-react'
+import { Mail } from 'lucide-react'
 import { Link } from 'react-router-dom'
+import InfinityLogo from './InfinityLogo'
 
-const footerLinks = [
-  { label: 'About', path: '/about' },
-  { label: 'Contact', path: '/contact' },
-  { label: 'Privacy', path: '/privacy' },
-  { label: 'Terms', path: '/terms' },
-  { label: 'Cookies', path: '/cookies' },
-  { label: 'Help', path: '/help' },
-  { label: 'Feedback', path: '/feedback' },
-  { label: 'Status', path: '/status' }
+const columns = [
+  {
+    title: 'Product',
+    links: [
+      { label: 'AI Chat', path: '/chat' },
+      { label: 'Image Studio', path: '/image' },
+      { label: 'Writer', path: '/writer' },
+      { label: 'Pricing', path: '/pricing' }
+    ]
+  },
+  {
+    title: 'Company',
+    links: [
+      { label: 'About', path: '/about' },
+      { label: 'Contact', path: '/contact' },
+      { label: 'Status', path: '/status' },
+      { label: 'Help', path: '/help' }
+    ]
+  },
+  {
+    title: 'Legal',
+    links: [
+      { label: 'Privacy', path: '/privacy' },
+      { label: 'Terms', path: '/terms' },
+      { label: 'Cookies', path: '/cookies' }
+    ]
+  }
 ]
 
 export default function Footer() {
   return (
-    <footer className="relative z-10 border-t border-white/10 bg-[#050816]/90 px-4 py-10 sm:px-6 lg:px-8">
-      <div className="mx-auto flex max-w-7xl flex-col gap-8 lg:flex-row lg:justify-between">
-        <div className="max-w-md">
+    <footer className="relative z-10 mt-24 border-t border-white/8 bg-[#05060a]/80 px-6 py-14 backdrop-blur-xl sm:px-8 lg:px-10">
+      <div className="mx-auto grid max-w-7xl gap-12 lg:grid-cols-[1.4fr_1fr_1fr_1fr]">
+        <div className="max-w-sm">
           <div className="flex items-center gap-3">
-            <div className="rounded-2xl border border-indigo-400/20 bg-indigo-500/10 p-2 text-indigo-300">
-              <Sparkles className="h-5 w-5" />
+            <div className="grid h-10 w-10 place-items-center rounded-2xl brand-gradient shadow-[0_10px_30px_rgba(168,85,247,0.35)]">
+              <InfinityLogo size={24} className="text-white" mono />
             </div>
-            <div>
-              <p className="text-lg font-semibold text-white">Aditya AI</p>
-              <p className="text-sm text-slate-400">Premium AI operations for modern teams.</p>
-            </div>
+            <span className="text-lg font-semibold tracking-tight text-white">InfinityAI</span>
           </div>
           <p className="mt-4 text-sm leading-7 text-slate-400">
-            Build faster with a polished, open-source AI workspace designed for launch-ready creative and technical workflows.
+            A premium AI workspace for chat, creation, and code — built for momentum and designed to feel effortless.
           </p>
+          <a href="mailto:hello@infinityai.com" className="mt-5 inline-flex items-center gap-2 text-sm text-slate-300 transition hover:text-white">
+            <Mail className="h-4 w-4 text-indigo-300" /> hello@infinityai.com
+          </a>
         </div>
 
-        <div className="grid flex-1 gap-8 sm:grid-cols-2 lg:grid-cols-3">
-          <div>
-            <p className="text-sm font-semibold uppercase tracking-[0.28em] text-slate-300">Explore</p>
-            <ul className="mt-4 space-y-2 text-sm text-slate-400">
-              {footerLinks.map((item) => (
+        {columns.map((col) => (
+          <div key={col.title}>
+            <p className="text-xs font-semibold uppercase tracking-[0.28em] text-slate-300">{col.title}</p>
+            <ul className="mt-4 space-y-3 text-sm text-slate-400">
+              {col.links.map((item) => (
                 <li key={item.path}>
-                  <Link to={item.path} className="transition hover:text-white">
-                    {item.label}
-                  </Link>
+                  <Link to={item.path} className="transition hover:text-white">{item.label}</Link>
                 </li>
               ))}
             </ul>
           </div>
-          <div>
-            <p className="text-sm font-semibold uppercase tracking-[0.28em] text-slate-300">Connect</p>
-            <ul className="mt-4 space-y-2 text-sm text-slate-400">
-              <li><a href="mailto:hello@aditya.ai" className="transition hover:text-white">hello@aditya.ai</a></li>
-              <li><a href="https://github.com" target="_blank" rel="noreferrer" className="transition hover:text-white">GitHub</a></li>
-              <li><a href="https://x.com" target="_blank" rel="noreferrer" className="transition hover:text-white">X / Twitter</a></li>
-            </ul>
-          </div>
-          <div>
-            <p className="text-sm font-semibold uppercase tracking-[0.28em] text-slate-300">Stay in sync</p>
-            <div className="mt-4 rounded-[1.2rem] border border-white/10 bg-white/5 p-4">
-              <label className="text-sm text-slate-400" htmlFor="newsletter-email">Newsletter</label>
-              <div className="mt-3 flex items-center gap-2 rounded-full border border-white/10 bg-[#050816] px-3 py-2">
-                <Mail className="h-4 w-4 text-indigo-300" />
-                <input id="newsletter-email" className="w-full bg-transparent text-sm text-white outline-none placeholder:text-slate-500" placeholder="Email" />
-                <button className="rounded-full bg-gradient-to-r from-indigo-500 to-fuchsia-500 p-2 text-white">
-                  <ArrowRight className="h-4 w-4" />
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
+        ))}
       </div>
 
-      <div className="mx-auto mt-8 flex max-w-7xl flex-col gap-3 border-t border-white/10 pt-6 text-sm text-slate-500 sm:flex-row sm:items-center sm:justify-between">
-        <p>© 2026 Aditya AI. Built with open-source tools and premium design.</p>
+      <div className="mx-auto mt-12 flex max-w-7xl flex-col gap-4 border-t border-white/8 pt-6 text-sm text-slate-500 sm:flex-row sm:items-center sm:justify-between">
+        <p>© 2026 InfinityAI. Crafted with premium motion & open-source technology.</p>
         <div className="flex items-center gap-4">
           <span>Version 1.0.0</span>
-          <span>•</span>
-          <span>Launch ready</span>
+          <span className="h-1 w-1 rounded-full bg-slate-600" />
+          <span>Endless AI Possibilities</span>
         </div>
       </div>
     </footer>

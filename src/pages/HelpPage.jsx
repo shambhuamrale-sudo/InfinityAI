@@ -12,19 +12,19 @@ const helpSections = [
 
 export default function HelpPage() {
   return (
-    <div className="relative min-h-screen overflow-hidden bg-[#050816] text-white">
+    <div className="app-canvas relative min-h-screen overflow-hidden text-white">
       <BackgroundEffects />
       <div className="relative z-10 mx-auto max-w-6xl px-4 py-6 sm:px-6 lg:px-8">
-        <motion.header initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} className="rounded-[1.75rem] border border-white/10 bg-[#0B1120]/85 p-6 backdrop-blur-2xl">
-          <p className="text-sm uppercase tracking-[0.35em] text-indigo-300">Help Center</p>
+        <motion.header initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} className="glass rounded-[1.75rem] p-6">
+          <p className="text-sm uppercase tracking-[0.3em] text-indigo-300">Help Center</p>
           <h1 className="mt-3 text-3xl font-semibold tracking-tight sm:text-4xl">Support that keeps your workflow moving.</h1>
         </motion.header>
         <div className="mt-6 grid gap-6 md:grid-cols-2">
           {helpSections.map((section, index) => {
             const Icon = section.icon
             return (
-              <motion.div key={section.title} initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: index * 0.05 }} className="rounded-[1.6rem] border border-white/10 bg-[#0B1120]/80 p-6 backdrop-blur-2xl">
-                <div className="rounded-2xl border border-indigo-400/20 bg-indigo-500/10 p-3 text-indigo-300 w-fit"><Icon className="h-5 w-5" /></div>
+              <motion.div key={section.title} initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: index * 0.05 }} className="glass rounded-[1.6rem] p-6">
+                <div className="grid h-11 w-11 place-items-center rounded-2xl bg-white/[0.05] text-indigo-300 ring-1 ring-white/10"><Icon className="h-5 w-5" /></div>
                 <h2 className="mt-4 text-xl font-semibold text-white">{section.title}</h2>
                 <p className="mt-3 text-sm leading-8 text-slate-400">{section.description}</p>
               </motion.div>

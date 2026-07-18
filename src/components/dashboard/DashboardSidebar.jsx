@@ -4,7 +4,7 @@ import {
   LayoutGrid, MessageSquareText, ImagePlus, Sparkles, Code2, FileText, Languages,
   History, GalleryHorizontalEnd, Bookmark, Crown, Bell, Settings, ShieldCheck, PanelLeftClose, PanelLeftOpen
 } from 'lucide-react'
-import { useAppContext } from '../../context/AppContext'
+import { useAppContext } from '../../context/useAppContext'
 import InfinityLogo from '../InfinityLogo'
 
 const NAV = [
@@ -23,15 +23,15 @@ const NAV = [
   { label: 'Settings', icon: Settings, route: '/settings' }
 ]
 
-export default function DashboardSidebar({ collapsed, onToggle, isDark }) {
+export default function DashboardSidebar({ collapsed, onToggle }) {
   const navigate = useNavigate()
   const { user } = useAppContext()
   const isAdmin = String(user?.role || '').toLowerCase().includes('admin')
   const items = isAdmin ? [...NAV, { label: 'Admin', icon: ShieldCheck, route: '/admin' }] : NAV
   const path = window.location.pathname
 
-  const surface = isDark ? 'border-white/10 bg-[#0B1120]/80' : 'border-slate-200/70 bg-white/80'
-  const muted = isDark ? 'text-slate-400' : 'text-slate-500'
+  const surface = 'border-white/8 bg-[#0a0c14]/80'
+  const muted = 'text-slate-400'
 
   return (
     <motion.aside
@@ -46,7 +46,7 @@ export default function DashboardSidebar({ collapsed, onToggle, isDark }) {
         </div>
         {!collapsed && (
           <div className="overflow-hidden">
-            <p className="whitespace-nowrap text-[15px] font-semibold tracking-tight text-white">Aditya AI</p>
+            <p className="whitespace-nowrap text-[15px] font-semibold tracking-tight text-white">InfinityAI</p>
             <p className={`whitespace-nowrap text-xs ${muted}`}>Command Center</p>
           </div>
         )}

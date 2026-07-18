@@ -1,104 +1,8 @@
-import { createContext, useContext, useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
+import { createDefaultState, normalizeState } from './stateSchema'
+import { AppContext } from './useAppContext'
 
-const AppContext = createContext(null)
 const STORAGE_KEY = 'infinityai-state-v1'
-
-const defaultState = {
-  user: {
-    name: 'Aditya Singh',
-    email: 'hello@aditya.ai',
-    role: 'Founder',
-    avatar: 'AS',
-    plan: 'free-trial',
-    location: 'London, UK',
-    company: 'AI Studio'
-  },
-  subscription: {
-    plan: 'free-trial',
-    trialStartedAt: Date.now(),
-    trialDays: 2,
-    expiresAt: Date.now() + 2 * 24 * 60 * 60 * 1000,
-    status: 'active'
-  },
-  usage: {
-    dayChats: 0,
-    dayImages: 0,
-    monthChats: 0,
-    monthImages: 0,
-    storageUsed: 24,
-    lastResetDay: '',
-    lastResetMonth: ''
-  },
-  adminConfig: {
-    trialDays: 2,
-    planLimits: {
-      'free-trial': { maxChatsPerDay: 20, maxImagesPerDay: 5, maxChatsPerMonth: 400, maxImagesPerMonth: 120 },
-      starter: { maxChatsPerDay: 120, maxImagesPerDay: 40, maxChatsPerMonth: 3000, maxImagesPerMonth: 1000 },
-      pro: { maxChatsPerDay: 500, maxImagesPerDay: 200, maxChatsPerMonth: 12000, maxImagesPerMonth: 6000 },
-      business: { maxChatsPerDay: 2000, maxImagesPerDay: 800, maxChatsPerMonth: 50000, maxImagesPerMonth: 20000 }
-    },
-    storageLimit: 100,
-    providerStatuses: { ollama: 'healthy', comfyui: 'healthy', openrouter: 'healthy' },
-    providerConfig: { chatProvider: 'ollama', imageProvider: 'comfyui', writerProvider: 'backend', codeProvider: 'backend', pdfProvider: 'backend', translateProvider: 'backend' },
-    analytics: { totalUsers: 1284, activeUsers: 812, conversionRate: '8.4%' }
-  },
-  chats: [],
-  images: [],
-  favorites: [],
-  notifications: [],
-  activity: [],
-  logs: [],
-  coupons: [],
-  preferences: { notificationsEnabled: true, motionEnabled: true, autoSave: true, darkMode: true, reducedMotion: false },
-  ui: {
-    commandPaletteOpen: false,
-    notificationsOpen: false,
-    upgradeModalOpen: false
-  },
-  toasts: []
-}
-
-function createDefaultState() {
-  return JSON.parse(JSON.stringify(defaultState))
-}
-
-function normalizeState(input) {
-  const now = new Date()
-  const dayKey = now.toISOString().slice(0, 10)
-  const monthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
-  const usage = input.usage || {}
-  return {
-    ...createDefaultState(),
-    ...input,
-    user: { ...createDefaultState().user, ...(input.user || {}) },
-    subscription: { ...createDefaultState().subscription, ...(input.subscription || {}) },
-    usage: {
-      ...createDefaultState().usage,
-      ...usage,
-      dayChats: usage.lastResetDay === dayKey ? Number(usage.dayChats || 0) : 0,
-      dayImages: usage.lastResetDay === dayKey ? Number(usage.dayImages || 0) : 0,
-      monthChats: usage.lastResetMonth === monthKey ? Number(usage.monthChats || 0) : 0,
-      monthImages: usage.lastResetMonth === monthKey ? Number(usage.monthImages || 0) : 0,
-      lastResetDay: dayKey,
-      lastResetMonth: monthKey
-    },
-    adminConfig: {
-      ...createDefaultState().adminConfig,
-      ...(input.adminConfig || {}),
-      planLimits: {
-        ...createDefaultState().adminConfig.planLimits,
-        ...((input.adminConfig && input.adminConfig.planLimits) || {})
-      },
-      providerConfig: {
-        ...createDefaultState().adminConfig.providerConfig,
-        ...((input.adminConfig && input.adminConfig.providerConfig) || {})
-      }
-    },
-    preferences: { ...createDefaultState().preferences, ...(input.preferences || {}) },
-    ui: { ...createDefaultState().ui, ...(input.ui || {}) },
-    toasts: []
-  }
-}
 
 export function AppProvider({ children }) {
   const [state, setState] = useState(createDefaultState)
@@ -242,28 +146,123 @@ export function AppProvider({ children }) {
     return true
   }
 
-  const addImageEntry = (prompt, result) => {
+  const addConversation = (conversation) => {
+    setState((prev) => ({
+      ...prev,
+      conversations: [conversation, ...(prev.conversations || [])].slice(0, 50)
+    }))
+  }
+
+  const updateConversation = (id, updates) => {
+    setState((prev) => ({
+      ...prev,
+      conversations: (prev.conversations || []).map((c) => c.id === id ? { ...c, ...updates, updatedAt: new Date().toISOString() } : c)
+    }))
+  }
+
+  const deleteConversation = (id) => {
+    setState((prev) => ({
+      ...prev,
+      conversations: (prev.conversations || []).filter((c) => c.id !== id)
+    }))
+  }
+
+  const addImageEntry = (prompt, result, meta = {}) => {
     const check = canUseTool('image')
     if (!check.allowed) {
       setState((prev) => ({ ...prev, ui: { ...prev.ui, upgradeModalOpen: true } }))
       return false
     }
     const entry = {
-      id: Date.now(),
+      id: meta.id || Date.now() + Math.floor(Math.random() * 1000),
       prompt,
       result,
+      images: Array.isArray(meta.images) ? meta.images : [],
+      negativePrompt: meta.negativePrompt || '',
+      provider: meta.provider || 'local',
+      model: meta.model || '',
+      settings: meta.settings || {},
+      tags: Array.isArray(meta.tags) ? meta.tags : [],
+      collectionId: meta.collectionId || null,
+      favorite: Boolean(meta.favorite),
       createdAt: new Date().toISOString(),
       tool: 'image'
     }
     setState((prev) => ({
       ...prev,
-      images: [entry, ...prev.images].slice(0, 20),
+      images: [entry, ...prev.images].slice(0, 200),
+      imageStudio: {
+        ...prev.imageStudio,
+        promptHistory: prompt
+          ? [prompt, ...(prev.imageStudio?.promptHistory || []).filter((p) => p !== prompt)].slice(0, 40)
+          : prev.imageStudio?.promptHistory || []
+      },
       usage: { ...prev.usage, dayImages: prev.usage.dayImages + 1, monthImages: prev.usage.monthImages + 1 },
-      activity: [{ id: Date.now(), title: 'Image generated', description: prompt.slice(0, 48), time: 'Just now' }, ...prev.activity].slice(0, 8),
+      activity: [{ id: Date.now(), title: 'Image generated', description: (prompt || '').slice(0, 48), time: 'Just now' }, ...prev.activity].slice(0, 8),
       notifications: [{ id: Date.now(), title: 'Image saved', message: 'Your image concept is now in history.', unread: true }, ...prev.notifications].slice(0, 6)
     }))
     addToast({ kind: 'success', title: 'Image ready', message: 'Your new concept was saved to your image history.' })
-    return true
+    return entry
+  }
+
+  const updateImageEntry = (id, updates) => {
+    setState((prev) => ({
+      ...prev,
+      images: prev.images.map((img) => (img.id === id ? { ...img, ...updates } : img))
+    }))
+  }
+
+  const deleteImageEntry = (id) => {
+    setState((prev) => ({ ...prev, images: prev.images.filter((img) => img.id !== id) }))
+  }
+
+  const toggleImageFavorite = (id) => {
+    setState((prev) => ({
+      ...prev,
+      images: prev.images.map((img) => (img.id === id ? { ...img, favorite: !img.favorite } : img))
+    }))
+  }
+
+  const setImageTags = (id, tags) => {
+    setState((prev) => ({
+      ...prev,
+      images: prev.images.map((img) => (img.id === id ? { ...img, tags } : img))
+    }))
+  }
+
+  const addImageCollection = (name) => {
+    const collection = { id: `col_${Date.now()}`, name, createdAt: new Date().toISOString() }
+    setState((prev) => ({
+      ...prev,
+      imageStudio: { ...prev.imageStudio, collections: [collection, ...(prev.imageStudio?.collections || [])] }
+    }))
+    return collection
+  }
+
+  const deleteImageCollection = (id) => {
+    setState((prev) => ({
+      ...prev,
+      images: prev.images.map((img) => (img.collectionId === id ? { ...img, collectionId: null } : img)),
+      imageStudio: { ...prev.imageStudio, collections: (prev.imageStudio?.collections || []).filter((c) => c.id !== id) }
+    }))
+  }
+
+  const assignImageCollection = (imageId, collectionId) => {
+    setState((prev) => ({
+      ...prev,
+      images: prev.images.map((img) => (img.id === imageId ? { ...img, collectionId } : img))
+    }))
+  }
+
+  const saveImageSettings = (settings) => {
+    setState((prev) => ({
+      ...prev,
+      imageStudio: { ...prev.imageStudio, settings: { ...prev.imageStudio.settings, ...settings } }
+    }))
+  }
+
+  const clearImagePromptHistory = () => {
+    setState((prev) => ({ ...prev, imageStudio: { ...prev.imageStudio, promptHistory: [] } }))
   }
 
   const addFavorite = (favorite) => {
@@ -314,6 +313,19 @@ export function AppProvider({ children }) {
     addToast({ kind: 'success', title: 'Preferences updated', message: 'Your workspace settings have been saved.' })
   }
 
+  // Silent preference update (no toast) — used by the model selector, which can
+  // change frequently and should not spam notifications.
+  const setChatModelSelection = ({ provider, model }) => {
+    setState((prev) => ({
+      ...prev,
+      preferences: {
+        ...prev.preferences,
+        ...(provider !== undefined ? { chatProvider: provider } : {}),
+        ...(model !== undefined ? { chatModel: model } : {})
+      }
+    }))
+  }
+
   const updateUserProfile = (updates) => {
     setState((prev) => ({ ...prev, user: { ...prev.user, ...updates } }))
     addToast({ kind: 'success', title: 'Profile saved', message: 'Your personal details were updated.' })
@@ -355,7 +367,7 @@ export function AppProvider({ children }) {
     }
     setAuth({ user: data.user, isAuthenticated: true, loading: false })
     setState((prev) => ({ ...prev, user: { ...prev.user, ...data.user } }))
-    addToast({ kind: 'success', title: 'Account created', message: 'Welcome to Aditya AI.' })
+    addToast({ kind: 'success', title: 'Account created', message: 'Welcome to InfinityAI.' })
     return { success: true, user: data.user }
   }
 
@@ -363,7 +375,7 @@ export function AppProvider({ children }) {
     const apiBase = import.meta.env.VITE_API_BASE_URL || '/api'
     await fetch(`${apiBase}/auth/logout`, { method: 'POST', credentials: 'include' }).catch(() => {})
     setAuth({ user: null, isAuthenticated: false, loading: false })
-    setState((prev) => ({ ...prev, user: { ...createDefaultState().user, ...prev.user } }))
+    setState((prev) => ({ ...prev, user: createDefaultState().user }))
     addToast({ kind: 'info', title: 'Signed out', message: 'You have been logged out securely.' })
   }
 
@@ -375,12 +387,25 @@ export function AppProvider({ children }) {
     logout,
     canUseTool,
     addChatEntry,
+    addConversation,
+    updateConversation,
+    deleteConversation,
     addImageEntry,
+    updateImageEntry,
+    deleteImageEntry,
+    toggleImageFavorite,
+    setImageTags,
+    addImageCollection,
+    deleteImageCollection,
+    assignImageCollection,
+    saveImageSettings,
+    clearImagePromptHistory,
     addFavorite,
     addNotification,
     updateSubscription,
     setAdminConfig,
     updatePreferences,
+    setChatModelSelection,
     updateUserProfile,
     addToast,
     dismissToast,
@@ -391,12 +416,4 @@ export function AppProvider({ children }) {
   }), [state, auth])
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>
-}
-
-export function useAppContext() {
-  const context = useContext(AppContext)
-  if (!context) {
-    throw new Error('useAppContext must be used within an AppProvider')
-  }
-  return context
 }

@@ -21,23 +21,29 @@
     "express-rate-limit": "^8.5.2",
     "framer-motion": "^12.42.2",
     "helmet": "^8.2.0",
+    "html-to-image": "^1.11.13",
     "jsonwebtoken": "^9.0.3",
+    "jspdf": "^4.2.1",
     "lucide-react": "^1.23.0",
     "mongodb": "^7.5.0",
+    "multer": "^2.2.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
+    "react-markdown": "^10.1.0",
     "react-router-dom": "^7.18.1",
+    "react-syntax-highlighter": "^16.1.1",
     "recharts": "^3.9.2",
+    "remark-gfm": "^4.0.1",
     "zod": "^4.4.3"
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.3.2",
     "@types/react": "^18.3.12",
     "@types/react-dom": "^18.3.1",
-    "@vitejs/plugin-react": "^6.0.3",
+    "@vitejs/plugin-react": "^4.7.0",
     "mongodb-memory-server": "^11.2.0",
     "oxlint": "^1.71.0",
     "tailwindcss": "^4.3.2",
-    "vite": "^8.1.1"
+    "vite": "^6.4.3"
   }
 }

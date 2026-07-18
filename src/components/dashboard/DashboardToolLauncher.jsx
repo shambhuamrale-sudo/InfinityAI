@@ -11,9 +11,9 @@ const TOOLS = [
   { title: 'Translator', description: 'Localize experiences across every market.', icon: Languages, route: '/translate', badge: 'Global', gradient: 'from-violet-500/30 via-fuchsia-500/20 to-rose-500/20', ring: 'group-hover:shadow-[0_24px_70px_rgba(139,92,246,0.22)]' }
 ]
 
-export default function ToolLauncher({ isDark }) {
+export default function ToolLauncher() {
   const navigate = useNavigate()
-  const soft = isDark ? 'border-white/10 bg-white/[0.04] hover:bg-white/[0.07]' : 'border-slate-200 bg-white/70 hover:bg-white'
+  const soft = 'border-white/8 bg-white/[0.03] hover:bg-white/[0.06]'
 
   return (
     <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">

@@ -2,9 +2,9 @@ import { motion } from 'framer-motion'
 import { Bookmark, Star, Sparkles, ArrowUpRight } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 
-export default function FavoritesRail({ favorites, isDark }) {
+export default function FavoritesRail({ favorites }) {
   const navigate = useNavigate()
-  const soft = isDark ? 'border-white/10 bg-white/[0.04]' : 'border-slate-200 bg-white/70'
+  const soft = 'glass'
   const items = (favorites && favorites.length)
     ? favorites.slice(0, 4)
     : [

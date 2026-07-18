@@ -2,7 +2,7 @@ import { AnimatePresence, motion } from 'framer-motion'
 import { Search, Sparkles } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { useAppContext } from '../context/AppContext'
+import { useAppContext } from '../context/useAppContext'
 
 const commands = [
   { label: 'Open Dashboard', path: '/dashboard' },
@@ -49,15 +49,15 @@ export default function CommandPalette() {
   return (
     <AnimatePresence>
       <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[70] flex items-start justify-center bg-slate-950/80 px-4 pt-20 backdrop-blur-xl">
-        <motion.div initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: 20, opacity: 0 }} className="w-full max-w-2xl rounded-[1.6rem] border border-white/10 bg-[#0B1120]/95 p-4 shadow-[0_30px_120px_rgba(2,6,23,0.64)]">
-          <div className="flex items-center gap-3 rounded-2xl border border-white/10 bg-white/5 px-4 py-3">
+        <motion.div initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: 20, opacity: 0 }} className="glass w-full max-w-2xl rounded-[1.6rem] p-4">
+          <div className="flex items-center gap-3 rounded-2xl border border-white/8 bg-white/[0.04] px-4 py-3">
             <Search className="h-4 w-4 text-indigo-300" />
             <input autoFocus value={query} onChange={(event) => setQuery(event.target.value)} className="flex-1 bg-transparent text-sm text-white outline-none placeholder:text-slate-500" placeholder="Search or jump to a page" />
-            <div className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs uppercase tracking-[0.2em] text-slate-400">Ctrl K</div>
+            <div className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-xs uppercase tracking-[0.2em] text-slate-400">Ctrl K</div>
           </div>
           <div className="mt-4 space-y-2">
             {filtered.map((command) => (
-              <button key={command.path} onClick={() => handleSelect(command.path)} className="flex w-full items-center justify-between rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-left text-sm text-slate-300 transition hover:border-indigo-400/35 hover:bg-white/10">
+              <button key={command.path} onClick={() => handleSelect(command.path)} className="flex w-full items-center justify-between rounded-2xl border border-white/8 bg-white/[0.03] px-4 py-3 text-left text-sm text-slate-300 transition hover:border-indigo-400/35 hover:bg-white/[0.07]">
                 <span>{command.label}</span>
                 <span className="text-indigo-300">↵</span>
               </button>

@@ -8,8 +8,8 @@ const chartData = [
 ]
 
 export default function AnalyticsPanel({ adminConfig, isDark }) {
-  const soft = isDark ? 'border-white/10 bg-white/[0.04]' : 'border-slate-200 bg-white/70'
-  const muted = isDark ? 'text-slate-400' : 'text-slate-500'
+  const soft = 'glass'
+  const muted = 'text-slate-400'
   const providerStatuses = adminConfig?.providerStatuses || {}
   const providerConfig = adminConfig?.providerConfig || {}
   const tick = isDark ? '#94a3b8' : '#64748b'

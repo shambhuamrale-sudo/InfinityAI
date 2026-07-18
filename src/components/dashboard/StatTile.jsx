@@ -22,15 +22,14 @@ function AnimatedNumber({ value, suffix = '' }) {
   return <span>{display.toLocaleString()}{suffix}</span>
 }
 
-export default function StatTile({ title, value, suffix = '', note, accent, icon: Icon, index = 0, isDark }) {
-  const soft = isDark ? 'border-white/10 bg-white/[0.04]' : 'border-slate-200 bg-white/70'
+export default function StatTile({ title, value, suffix = '', note, accent, icon: Icon, index = 0 }) {
   return (
     <motion.div
       initial={{ opacity: 0, y: 16 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.5, delay: index * 0.05, ease: 'easeOut' }}
       whileHover={{ y: -6 }}
-      className={`group relative overflow-hidden rounded-3xl border p-5 ${soft} backdrop-blur-xl`}
+      className="glass group relative overflow-hidden rounded-3xl p-5"
     >
       <div className={`pointer-events-none absolute -right-6 -top-6 h-24 w-24 rounded-full bg-gradient-to-br ${accent} opacity-20 blur-2xl transition-opacity duration-300 group-hover:opacity-40`} />
       <div className="flex items-center justify-between">
