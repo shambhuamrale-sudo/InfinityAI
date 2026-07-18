@@ -19,8 +19,15 @@ const IS_PRODUCTION = process.env.NODE_ENV === 'production'
 const clientOriginEnv = process.env.CLIENT_ORIGIN
 const allowedOrigins = clientOriginEnv
   ? clientOriginEnv.split(',').map((o) => o.trim()).filter(Boolean)
-  : []
+  : IS_PRODUCTION
+    ? []
+    : ['http://localhost:5173']
 const cookieSameSite = process.env.COOKIE_SAMESITE || (allowedOrigins.length ? 'none' : 'lax')
+const corsOptions = allowedOrigins.length
+  ? { origin: allowedOrigins, credentials: true }
+  : IS_PRODUCTION
+    ? { origin: false, credentials: true }
+    : { origin: true, credentials: true }
 const sessionCookieOptions = {
   httpOnly: true,
   sameSite: cookieSameSite,
@@ -32,15 +39,24 @@ const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
 const app = express()
 
+app.set('trust proxy', 1)
 app.use(helmet({ crossOriginResourcePolicy: false }))
-app.use(cors(allowedOrigins.length ? { origin: allowedOrigins, credentials: true } : { origin: true, credentials: true }))
+app.use(cors(corsOptions))
 app.use(cookieParser())
 app.use(express.json({ limit: '1mb' }))
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 20 * 1024 * 1024 } })
 
 const SALT_ROUNDS = Number(process.env.AUTH_SALT_ROUNDS || 12)
-const JWT_SECRET = process.env.JWT_SECRET || 'aditya-ai-jwt-secret-change-in-production'
+let JWT_SECRET = process.env.JWT_SECRET
+if (!JWT_SECRET) {
+  if (IS_PRODUCTION) {
+    console.error('JWT_SECRET is required in production.')
+    process.exit(1)
+  }
+  JWT_SECRET = 'aditya-ai-jwt-secret-change-in-production'
+  console.warn('JWT_SECRET not set. Using insecure default for development only.')
+}
 const JWT_EXPIRY = process.env.JWT_EXPIRY || '7d'
 
 const limiter = rateLimit({ windowMs: 60_000, max: 120, standardHeaders: true, legacyHeaders: false })
@@ -141,11 +157,11 @@ async function connectMongo() {
         MongoMemoryServer = mod.MongoMemoryServer
       }
       mongoMemoryServer = await MongoMemoryServer.create()
-      mongoClient = new MongoClient(mongoMemoryServer.getUri())
+      mongoClient = new MongoClient(mongoMemoryServer.getUri(), { serverSelectionTimeoutMS: 5000 })
       await mongoClient.connect()
       mongoDb = mongoClient.db(process.env.MONGO_DB || 'infinityai')
     } else {
-      mongoClient = new MongoClient(uri)
+      mongoClient = new MongoClient(uri, { serverSelectionTimeoutMS: 5000 })
       await mongoClient.connect()
       mongoDb = mongoClient.db(process.env.MONGO_DB || 'infinityai')
     }
@@ -741,6 +757,15 @@ app.use((error, _req, res, _next) => {
 })
 
 export async function startServer(port = Number(process.env.PORT || 4000)) {
+  if (IS_PRODUCTION) {
+    try {
+      await connectMongo()
+      console.log('MongoDB connection established')
+    } catch (error) {
+      console.error('Failed to connect to MongoDB on startup:', error.message)
+      process.exit(1)
+    }
+  }
   return new Promise((resolve) => {
     const server = app.listen(port, '0.0.0.0', () => {
       console.log(`Aditya AI API listening on port ${port}`)
@@ -748,6 +773,24 @@ export async function startServer(port = Number(process.env.PORT || 4000)) {
     })
   })
 }
+
+process.on('SIGTERM', async () => {
+  console.log('SIGTERM received, shutting down gracefully')
+  if (mongoClient) {
+    await mongoClient.close()
+    console.log('MongoDB connection closed')
+  }
+  process.exit(0)
+})
+
+process.on('SIGINT', async () => {
+  console.log('SIGINT received, shutting down gracefully')
+  if (mongoClient) {
+    await mongoClient.close()
+    console.log('MongoDB connection closed')
+  }
+  process.exit(0)
+})
 
 if (process.argv[1] && process.argv[1].endsWith('server.js')) {
   startServer().catch((error) => {
