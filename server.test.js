@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { startServer, verifyUserByEmail } from './server.js'
+import { startServer, verifyUserByEmail, getUserByEmail } from './server.js'
 
 test('health endpoint returns ok', async () => {
   const server = await startServer(0)
@@ -15,21 +15,46 @@ test('health endpoint returns ok', async () => {
   }
 })
 
-test('signup creates a user and returns a token', async () => {
+test('signup creates a user without token', async () => {
   const server = await startServer(0)
   try {
     const address = server.address()
     const response = await fetch(`http://127.0.0.1:${address.port}/api/auth/signup`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name: 'Test User', email: 'test@aditya.ai', password: 'password123' })
+      body: JSON.stringify({ name: 'Test User', email: 'test@aditya.ai', password: 'SecurePass1!' })
     })
     assert.equal(response.status, 201)
     const body = await response.json()
-    assert.ok(body.token)
     assert.equal(body.user.email, 'test@aditya.ai')
     assert.equal(body.user.role, 'user')
     assert.equal(body.user.isVerified, false)
+    assert.equal(body.token, undefined)
+  } finally {
+    await new Promise((resolve, reject) => server.close((error) => (error ? reject(error) : resolve())))
+  }
+})
+
+test('signup rejects weak password', async () => {
+  const server = await startServer(0)
+  try {
+    const address = server.address()
+    const weakPasswords = [
+      { password: 'short', reason: 'too short' },
+      { password: 'all lowercase', reason: 'no uppercase' },
+      { password: 'ALL UPPERCASE', reason: 'no lowercase' },
+      { password: 'NoNumbers!', reason: 'no digits' },
+      { password: 'NoSpecial123', reason: 'no special char' },
+      { password: 'has space 1A!', reason: 'contains space' }
+    ]
+    for (const { password } of weakPasswords) {
+      const response = await fetch(`http://127.0.0.1:${address.port}/api/auth/signup`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: 'Weak User', email: `weak-${password.length}@aditya.ai`, password })
+      })
+      assert.equal(response.status, 400, `Expected 400 for password: ${password}`)
+    }
   } finally {
     await new Promise((resolve, reject) => server.close((error) => (error ? reject(error) : resolve())))
   }
@@ -42,18 +67,68 @@ test('login returns token for valid credentials', async () => {
     await fetch(`http://127.0.0.1:${address.port}/api/auth/signup`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name: 'Login User', email: 'login@aditya.ai', password: 'password123' })
+      body: JSON.stringify({ name: 'Login User', email: 'login@aditya.ai', password: 'SecurePass1!' })
     })
     await verifyUserByEmail('login@aditya.ai')
     const response = await fetch(`http://127.0.0.1:${address.port}/api/auth/login`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email: 'login@aditya.ai', password: 'password123' })
+      body: JSON.stringify({ email: 'login@aditya.ai', password: 'SecurePass1!' })
     })
     assert.equal(response.status, 200)
     const body = await response.json()
     assert.ok(body.token)
     assert.equal(body.user.email, 'login@aditya.ai')
+  } finally {
+    await new Promise((resolve, reject) => server.close((error) => (error ? reject(error) : resolve())))
+  }
+})
+
+test('login rejects unverified email with resend info', async () => {
+  const server = await startServer(0)
+  try {
+    const address = server.address()
+    await fetch(`http://127.0.0.1:${address.port}/api/auth/signup`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: 'Unverified User', email: 'unverified@aditya.ai', password: 'SecurePass1!' })
+    })
+    const response = await fetch(`http://127.0.0.1:${address.port}/api/auth/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: 'unverified@aditya.ai', password: 'SecurePass1!' })
+    })
+    assert.equal(response.status, 403)
+    const body = await response.json()
+    assert.equal(body.message, 'Please verify your email first.')
+    assert.equal(body.resendOtp, true)
+    assert.equal(body.email, 'unverified@aditya.ai')
+  } finally {
+    await new Promise((resolve, reject) => server.close((error) => (error ? reject(error) : resolve())))
+  }
+})
+
+test('verify-email returns token and logs user in', async () => {
+  const server = await startServer(0)
+  try {
+    const address = server.address()
+    await fetch(`http://127.0.0.1:${address.port}/api/auth/signup`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: 'Verify Token User', email: 'verifytoken@aditya.ai', password: 'SecurePass1!' })
+    })
+    const user = await getUserByEmail('verifytoken@aditya.ai')
+    assert.ok(user)
+    const response = await fetch(`http://127.0.0.1:${address.port}/api/auth/verify-email`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: 'verifytoken@aditya.ai', otp: user.emailOtp })
+    })
+    assert.equal(response.status, 200)
+    const body = await response.json()
+    assert.ok(body.token)
+    assert.equal(body.user.isVerified, true)
+    assert.equal(body.user.email, 'verifytoken@aditya.ai')
   } finally {
     await new Promise((resolve, reject) => server.close((error) => (error ? reject(error) : resolve())))
   }
@@ -66,12 +141,12 @@ test('rejects duplicate signup', async () => {
     await fetch(`http://127.0.0.1:${address.port}/api/auth/signup`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name: 'Dup', email: 'dup@aditya.ai', password: 'password123' })
+      body: JSON.stringify({ name: 'Dup', email: 'dup@aditya.ai', password: 'SecurePass1!' })
     })
     const response = await fetch(`http://127.0.0.1:${address.port}/api/auth/signup`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name: 'Dup2', email: 'dup@aditya.ai', password: 'password123' })
+      body: JSON.stringify({ name: 'Dup2', email: 'dup@aditya.ai', password: 'SecurePass1!' })
     })
     assert.equal(response.status, 409)
   } finally {
@@ -176,7 +251,7 @@ test('forgot password sends OTP for existing email', async () => {
     await fetch(`http://127.0.0.1:${address.port}/api/auth/signup`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name: 'FP User', email: 'fp@aditya.ai', password: 'password123' })
+      body: JSON.stringify({ name: 'FP User', email: 'fp@aditya.ai', password: 'SecurePass1!' })
     })
     const response = await fetch(`http://127.0.0.1:${address.port}/api/auth/forgot-password`, {
       method: 'POST',
@@ -198,13 +273,13 @@ test('verify email activates account', async () => {
     await fetch(`http://127.0.0.1:${address.port}/api/auth/signup`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name: 'VE User', email: 've@aditya.ai', password: 'password123' })
+      body: JSON.stringify({ name: 'VE User', email: 've@aditya.ai', password: 'SecurePass1!' })
     })
     await verifyUserByEmail('ve@aditya.ai')
     const loginRes = await fetch(`http://127.0.0.1:${address.port}/api/auth/login`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email: 've@aditya.ai', password: 'password123' })
+      body: JSON.stringify({ email: 've@aditya.ai', password: 'SecurePass1!' })
     })
     assert.equal(loginRes.status, 200)
     const body = await loginRes.json()
@@ -222,7 +297,7 @@ test('resend otp returns cooldown error when called too quickly', async () => {
     await fetch(`http://127.0.0.1:${address.port}/api/auth/signup`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name: 'RO User', email: 'ro@aditya.ai', password: 'password123' })
+      body: JSON.stringify({ name: 'RO User', email: 'ro@aditya.ai', password: 'SecurePass1!' })
     })
     const response = await fetch(`http://127.0.0.1:${address.port}/api/auth/resend-otp`, {
       method: 'POST',

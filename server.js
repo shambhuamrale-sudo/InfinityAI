@@ -65,8 +65,8 @@ app.use('/api/', (req, res, next) => {
   return limiter(req, res, next)
 })
 
-const authLimiter = rateLimit({ windowMs: 60_000, max: 10, standardHeaders: true, legacyHeaders: false })
-const forgotPasswordLimiter = rateLimit({ windowMs: 60_000, max: 3, standardHeaders: true, legacyHeaders: false })
+const authLimiter = rateLimit({ windowMs: 60_000, max: 100, standardHeaders: true, legacyHeaders: false })
+const forgotPasswordLimiter = rateLimit({ windowMs: 60_000, max: 100, standardHeaders: true, legacyHeaders: false })
 
 const EMAIL_FROM = process.env.EMAIL_FROM || 'InfinityAI <noreply@infinityai.app>'
 const RESEND_API_KEY = process.env.RESEND_API_KEY
@@ -316,7 +316,8 @@ async function getUserFromToken(req) {
   }
 }
 
-const signupSchema = z.object({ name: z.string().min(2), email: z.string().email(), password: z.string().min(6) })
+const STRONG_PASSWORD_REGEX = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[!@#$%^&*()_+=\-\[\]{};':"\\|,.<>/?])(?!.*\s).{8,}$/
+const signupSchema = z.object({ name: z.string().min(2), email: z.string().email(), password: z.string().regex(STRONG_PASSWORD_REGEX, 'Password must be at least 8 characters with uppercase, lowercase, number, and special character') })
 const loginSchema = z.object({ email: z.string().email(), password: z.string().min(1) })
 
 function normalizeState(incoming = {}) {
@@ -439,10 +440,8 @@ app.post('/api/auth/signup', authLimiter, async (req, res) => {
   const user = { name, email, passwordHash, role: 'user', avatar: name.split(' ').map((part) => part[0]).join('').slice(0, 2).toUpperCase(), plan: 'free-trial', location: '', company: '', isVerified: false, emailOtp, emailOtpExpiry, createdAt: now, updatedAt: now }
   const result = await usersCollection.insertOne(user)
   user._id = result.insertedId
-  const token = signToken(user)
-  res.cookie('token', token, sessionCookieOptions)
   const safe = sanitizeUser(user)
-  res.status(201).json({ user: safe, token })
+  res.status(201).json({ user: safe })
   try {
     await EmailService.sendVerificationOtp(email, emailOtp)
   } catch (error) {
@@ -460,7 +459,7 @@ app.post('/api/auth/login', authLimiter, async (req, res) => {
   const user = await usersCollection.findOne({ email })
   if (!user) return res.status(401).json({ error: 'Invalid email or password' })
   if (user.isVerified === false) {
-    return res.status(403).json({ message: 'Please verify your email before logging in.' })
+    return res.status(403).json({ message: 'Please verify your email first.', resendOtp: true, email: user.email })
   }
   const valid = await bcrypt.compare(password, user.passwordHash)
   if (!valid) return res.status(401).json({ error: 'Invalid email or password' })
@@ -546,7 +545,11 @@ app.post('/api/auth/verify-email', async (req, res) => {
     { _id: user._id },
     { $set: { isVerified: true }, $unset: { emailOtp: '', emailOtpExpiry: '', emailOtpSentAt: '' } }
   )
-  res.json({ ok: true, message: 'Email verified successfully' })
+  const verifiedUser = { ...user, isVerified: true }
+  const token = signToken(verifiedUser)
+  res.cookie('token', token, sessionCookieOptions)
+  const safe = sanitizeUser(verifiedUser)
+  res.json({ ok: true, message: 'Email verified successfully', user: safe, token })
 })
 
 app.post('/api/auth/resend-otp', async (req, res) => {
@@ -964,6 +967,12 @@ export async function verifyUserByEmail(email) {
     { $set: { isVerified: true }, $unset: { emailOtp: '', emailOtpExpiry: '', emailOtpSentAt: '' } }
   )
   return user
+}
+
+export async function getUserByEmail(email) {
+  const db = await connectMongo()
+  if (!db || !usersCollection) return null
+  return usersCollection.findOne({ email })
 }
 
 export async function startServer(port = Number(process.env.PORT || 4000)) {

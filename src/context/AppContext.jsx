@@ -341,7 +341,11 @@ export function AppProvider({ children }) {
     })
     const data = await response.json()
     if (!response.ok) {
-      const error = data.error || 'Login failed'
+      if (response.status === 403 && data.resendOtp) {
+        addToast({ kind: 'warning', title: 'Email not verified', message: data.message || 'Please verify your email first.' })
+        return { success: false, error: data.message, resendOtp: true, email: data.email }
+      }
+      const error = data.error || data.message || 'Login failed'
       addToast({ kind: 'error', title: 'Login failed', message: error })
       return { success: false, error }
     }
@@ -365,8 +369,6 @@ export function AppProvider({ children }) {
       addToast({ kind: 'error', title: 'Signup failed', message: error })
       return { success: false, error }
     }
-    setAuth({ user: data.user, isAuthenticated: true, loading: false })
-    setState((prev) => ({ ...prev, user: { ...prev.user, ...data.user } }))
     addToast({ kind: 'success', title: 'Account created', message: 'Welcome to InfinityAI. Please verify your email.' })
     return { success: true, user: data.user }
   }
@@ -434,7 +436,10 @@ export function AppProvider({ children }) {
       const error = data.error || data.message || 'Verification failed'
       return { success: false, error }
     }
-    setAuth((prev) => ({ ...prev, user: { ...prev.user, isVerified: true } }))
+    if (data.user) {
+      setAuth({ user: data.user, isAuthenticated: true, loading: false })
+      setState((prev) => ({ ...prev, user: { ...prev.user, ...data.user } }))
+    }
     addToast({ kind: 'success', title: 'Email verified', message: 'Your account is now active.' })
     return { success: true }
   }
