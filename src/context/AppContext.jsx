@@ -4,6 +4,26 @@ import { AppContext } from './useAppContext'
 
 const STORAGE_KEY = 'infinityai-state-v1'
 
+function getErrorMessage(err) {
+  const data = err?.response?.data
+
+  if (!data) return 'Something went wrong.'
+
+  if (typeof data.error === 'string')
+    return data.error
+
+  if (typeof data.error === 'object') {
+    return Object.values(data.error)
+      .flat()
+      .join('\n')
+  }
+
+  if (typeof data.message === 'string')
+    return data.message
+
+  return 'Something went wrong.'
+}
+
 export function AppProvider({ children }) {
   const [state, setState] = useState(createDefaultState)
   const [hydrated, setHydrated] = useState(false)
@@ -345,7 +365,7 @@ export function AppProvider({ children }) {
         addToast({ kind: 'warning', title: 'Email not verified', message: data.message || 'Please verify your email first.' })
         return { success: false, error: data.message, resendOtp: true, email: data.email }
       }
-      const error = data.error || data.message || 'Login failed'
+      const error = getErrorMessage(data)
       addToast({ kind: 'error', title: 'Login failed', message: error })
       return { success: false, error }
     }
@@ -365,7 +385,7 @@ export function AppProvider({ children }) {
     })
     const data = await response.json()
     if (!response.ok) {
-      const error = data.error || 'Signup failed'
+      const error = getErrorMessage(data)
       addToast({ kind: 'error', title: 'Signup failed', message: error })
       return { success: false, error }
     }
@@ -383,7 +403,7 @@ export function AppProvider({ children }) {
     })
     const data = await response.json()
     if (!response.ok) {
-      const error = data.error || 'Failed to send OTP'
+      const error = getErrorMessage(data)
       return { success: false, error }
     }
     addToast({ kind: 'success', title: 'OTP sent', message: 'Check your email for the reset code.' })
@@ -400,7 +420,7 @@ export function AppProvider({ children }) {
     })
     const data = await response.json()
     if (!response.ok) {
-      const error = data.error || 'Invalid OTP'
+      const error = getErrorMessage(data)
       return { success: false, error }
     }
     return { success: true }
@@ -416,7 +436,7 @@ export function AppProvider({ children }) {
     })
     const data = await response.json()
     if (!response.ok) {
-      const error = data.error || 'Failed to reset password'
+      const error = getErrorMessage(data)
       return { success: false, error }
     }
     addToast({ kind: 'success', title: 'Password reset', message: 'You can now log in with your new password.' })
@@ -433,7 +453,7 @@ export function AppProvider({ children }) {
     })
     const data = await response.json()
     if (!response.ok) {
-      const error = data.error || data.message || 'Verification failed'
+      const error = getErrorMessage(data)
       return { success: false, error }
     }
     if (data.user) {
@@ -454,7 +474,7 @@ export function AppProvider({ children }) {
     })
     const data = await response.json()
     if (!response.ok) {
-      const error = data.error || 'Failed to resend OTP'
+      const error = getErrorMessage(data)
       return { success: false, error }
     }
     addToast({ kind: 'success', title: 'OTP resent', message: 'Check your email for the new code.' })
