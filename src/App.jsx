@@ -39,7 +39,6 @@ import ToastViewport from './components/ToastViewport'
 import PageLoader from './components/PageLoader'
 import ProviderStatusIndicator from './components/ProviderStatusIndicator'
 import ForgotPasswordPage from './pages/ForgotPasswordPage'
-import VerifyEmailPage from './pages/VerifyEmailPage'
 import { useAppContext } from './context/useAppContext'
 
 function AppShell() {
@@ -102,7 +101,6 @@ function AppShell() {
         <Route path="/login" element={auth.isAuthenticated ? <Navigate to="/dashboard" replace /> : <AuthPage type="login" />} />
         <Route path="/signup" element={auth.isAuthenticated ? <Navigate to="/dashboard" replace /> : <AuthPage type="signup" />} />
         <Route path="/forgot-password" element={<ForgotPasswordPage />} />
-        <Route path="/verify-email" element={<VerifyEmailPage />} />
         <Route path="/dashboard" element={renderProtected(<DashboardPage />)} />
         <Route path="/chat" element={renderProtected(<AIChatPage />)} />
         <Route path="/image" element={renderProtected(<AIImagePage />)} />

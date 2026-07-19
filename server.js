@@ -229,7 +229,7 @@ function getOtpExpiry(minutes = 10) {
 
 function sanitizeUser(user) {
   if (!user) return user
-  const { passwordHash: _passwordHash, emailOtp: _emailOtp, emailOtpExpiry: _emailOtpExpiry, resetOtp: _resetOtp, resetOtpExpiry: _resetOtpExpiry, resetOtpAttempts: _resetOtpAttempts, emailOtpSentAt: _emailOtpSentAt, resetOtpSentAt: _resetOtpSentAt, ...safe } = user
+  const { passwordHash: _passwordHash, resetOtp: _resetOtp, resetOtpExpiry: _resetOtpExpiry, resetOtpAttempts: _resetOtpAttempts, resetOtpSentAt: _resetOtpSentAt, ...safe } = user
   return safe
 }
 
@@ -278,20 +278,6 @@ const EmailService = {
     return body
   },
 
-  async sendVerificationOtp(email, otp) {
-    const html = `
-      <div style="font-family: system-ui, sans-serif; max-width: 600px; margin: 0 auto; padding: 2rem;">
-        <h2 style="color: #6366f1; margin-bottom: 1rem;">Verify your email</h2>
-        <p style="color: #374151; line-height: 1.6;">Use the following OTP to verify your InfinityAI account. This code expires in 10 minutes.</p>
-        <div style="background: #f3f4f6; border-radius: 12px; padding: 1.5rem; text-align: center; margin: 1.5rem 0;">
-          <span style="font-size: 2rem; font-weight: bold; letter-spacing: 0.5rem; color: #111827;">${otp}</span>
-        </div>
-        <p style="color: #6b7280; font-size: 0.875rem;">If you did not create an account, you can safely ignore this email.</p>
-      </div>
-    `
-    await this.send(email, 'Verify your InfinityAI email', html)
-  },
-
   async sendResetOtp(email, otp) {
     const html = `
       <div style="font-family: system-ui, sans-serif; max-width: 600px; margin: 0 auto; padding: 2rem;">
@@ -321,7 +307,6 @@ async function getUserFromToken(req) {
     const userId = ObjectId.isValid(decoded.id) ? new ObjectId(decoded.id) : decoded.id
     const user = await usersCollection.findOne({ _id: userId })
     if (!user) return null
-    if (user.isVerified === false) return null
     return sanitizeUser(user)
   } catch {
     return null
@@ -447,19 +432,11 @@ app.post('/api/auth/signup', authLimiter, async (req, res) => {
   if (existing) return res.status(409).json({ error: 'Email already registered' })
   const passwordHash = await bcrypt.hash(password, SALT_ROUNDS)
   const now = new Date().toISOString()
-  const emailOtp = generateOtp()
-  const emailOtpExpiry = getOtpExpiry(10)
-  const user = { name, email, passwordHash, role: 'user', avatar: name.split(' ').map((part) => part[0]).join('').slice(0, 2).toUpperCase(), plan: 'free-trial', location: '', company: '', isVerified: false, emailOtp, emailOtpExpiry, createdAt: now, updatedAt: now }
+  const user = { name, email, passwordHash, role: 'user', avatar: name.split(' ').map((part) => part[0]).join('').slice(0, 2).toUpperCase(), plan: 'free-trial', location: '', company: '', isVerified: true, createdAt: now, updatedAt: now }
   const result = await usersCollection.insertOne(user)
   user._id = result.insertedId
   const safe = sanitizeUser(user)
   res.status(201).json({ user: safe })
-  try {
-    await EmailService.sendVerificationOtp(email, emailOtp)
-  } catch (error) {
-    console.error("Failed to send verification email")
-    console.error(error)
-  }
 })
 
 app.post('/api/auth/login', authLimiter, async (req, res) => {
@@ -470,9 +447,6 @@ app.post('/api/auth/login', authLimiter, async (req, res) => {
   if (!db || !usersCollection) return res.status(500).json({ error: 'Database unavailable' })
   const user = await usersCollection.findOne({ email })
   if (!user) return res.status(401).json({ error: 'Invalid email or password' })
-  if (user.isVerified === false) {
-    return res.status(403).json({ message: 'Please verify your email first.', resendOtp: true, email: user.email })
-  }
   const valid = await bcrypt.compare(password, user.passwordHash)
   if (!valid) return res.status(401).json({ error: 'Invalid email or password' })
   const token = signToken(user)
@@ -540,57 +514,6 @@ app.post('/api/auth/reset-password', async (req, res) => {
     { $set: { passwordHash }, $unset: { resetOtp: '', resetOtpExpiry: '', resetOtpAttempts: '' } }
   )
   res.json({ ok: true, message: 'Password reset successfully' })
-})
-
-app.post('/api/auth/verify-email', async (req, res) => {
-  const { email, otp } = req.body || {}
-  if (!email || !otp) return res.status(400).json({ error: 'Email and OTP are required' })
-  const db = await connectMongo()
-  if (!db || !usersCollection) return res.status(500).json({ error: 'Database unavailable' })
-  const user = await usersCollection.findOne({ email })
-  if (!user) return res.status(400).json({ error: 'Invalid request' })
-  if (user.isVerified) return res.status(400).json({ error: 'Email is already verified' })
-  if (!user.emailOtp || !user.emailOtpExpiry) return res.status(400).json({ error: 'No OTP requested' })
-  if (new Date(user.emailOtpExpiry) < new Date()) return res.status(400).json({ error: 'OTP has expired' })
-  if (user.emailOtp !== String(otp)) return res.status(400).json({ error: 'Invalid OTP' })
-  await usersCollection.updateOne(
-    { _id: user._id },
-    { $set: { isVerified: true }, $unset: { emailOtp: '', emailOtpExpiry: '', emailOtpSentAt: '' } }
-  )
-  const verifiedUser = { ...user, isVerified: true }
-  const token = signToken(verifiedUser)
-  res.cookie('token', token, sessionCookieOptions)
-  const safe = sanitizeUser(verifiedUser)
-  res.json({ ok: true, message: 'Email verified successfully', user: safe, token })
-})
-
-app.post('/api/auth/resend-otp', async (req, res) => {
-  const { email } = req.body || {}
-  if (!email) return res.status(400).json({ error: 'Email is required' })
-  const db = await connectMongo()
-  if (!db || !usersCollection) return res.status(500).json({ error: 'Database unavailable' })
-  const user = await usersCollection.findOne({ email })
-  if (!user) return res.status(404).json({ error: 'User not found' })
-  if (user.isVerified) return res.status(400).json({ error: 'Email is already verified' })
-  const sixtySecondsAgo = Date.now() - 60 * 1000
-  if (user.emailOtpSentAt && new Date(user.emailOtpSentAt).getTime() > sixtySecondsAgo) {
-    const remaining = Math.ceil((new Date(user.emailOtpSentAt).getTime() + 60 * 1000 - Date.now()) / 1000)
-    return res.status(429).json({ error: `Please wait ${remaining} seconds before resending` })
-  }
-  const otp = generateOtp()
-  const otpExpiry = getOtpExpiry(10)
-  const now = new Date().toISOString()
-  await usersCollection.updateOne(
-    { _id: user._id },
-    { $set: { emailOtp: otp, emailOtpExpiry: otpExpiry, emailOtpSentAt: now } }
-  )
-  try {
-    await EmailService.sendVerificationOtp(email, otp)
-  } catch (error) {
-    console.error("Failed to send verification email")
-    console.error(error)
-  }
-  res.json({ ok: true, message: 'OTP sent successfully' })
 })
 
 app.get('/api/auth/me', async (req, res) => {
@@ -968,24 +891,6 @@ app.use((error, _req, res, _next) => {
   console.error(error)
   res.status(500).json({ error: 'Internal server error' })
 })
-
-export async function verifyUserByEmail(email) {
-  const db = await connectMongo()
-  if (!db || !usersCollection) return null
-  const user = await usersCollection.findOne({ email })
-  if (!user) return null
-  await usersCollection.updateOne(
-    { _id: user._id },
-    { $set: { isVerified: true }, $unset: { emailOtp: '', emailOtpExpiry: '', emailOtpSentAt: '' } }
-  )
-  return user
-}
-
-export async function getUserByEmail(email) {
-  const db = await connectMongo()
-  if (!db || !usersCollection) return null
-  return usersCollection.findOne({ email })
-}
 
 export async function startServer(port = Number(process.env.PORT || 4000)) {
   if (IS_PRODUCTION) {

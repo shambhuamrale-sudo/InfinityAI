@@ -81,13 +81,11 @@ export default function AuthPage({ type = 'login' }) {
       const result = await login(form.email, form.password)
       if (result.success) {
         navigate('/dashboard')
-      } else if (result.resendOtp) {
-        navigate('/verify-email', { state: { email: form.email } })
       }
     } else {
       const result = await signup(form.name, form.email, form.password)
       if (result.success) {
-        navigate('/verify-email', { state: { email: form.email } })
+        navigate('/dashboard')
       }
     }
     setSubmitting(false)

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { startServer, verifyUserByEmail, getUserByEmail } from './server.js'
+import { startServer } from './server.js'
 
 test('health endpoint returns ok', async () => {
   const server = await startServer(0)
@@ -28,7 +28,7 @@ test('signup creates a user without token', async () => {
     const body = await response.json()
     assert.equal(body.user.email, 'test@aditya.ai')
     assert.equal(body.user.role, 'user')
-    assert.equal(body.user.isVerified, false)
+    assert.equal(body.user.isVerified, true)
     assert.equal(body.token, undefined)
   } finally {
     await new Promise((resolve, reject) => server.close((error) => (error ? reject(error) : resolve())))
@@ -69,7 +69,6 @@ test('login returns token for valid credentials', async () => {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ name: 'Login User', email: 'login@aditya.ai', password: 'SecurePass1!' })
     })
-    await verifyUserByEmail('login@aditya.ai')
     const response = await fetch(`http://127.0.0.1:${address.port}/api/auth/login`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -79,56 +78,6 @@ test('login returns token for valid credentials', async () => {
     const body = await response.json()
     assert.ok(body.token)
     assert.equal(body.user.email, 'login@aditya.ai')
-  } finally {
-    await new Promise((resolve, reject) => server.close((error) => (error ? reject(error) : resolve())))
-  }
-})
-
-test('login rejects unverified email with resend info', async () => {
-  const server = await startServer(0)
-  try {
-    const address = server.address()
-    await fetch(`http://127.0.0.1:${address.port}/api/auth/signup`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name: 'Unverified User', email: 'unverified@aditya.ai', password: 'SecurePass1!' })
-    })
-    const response = await fetch(`http://127.0.0.1:${address.port}/api/auth/login`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email: 'unverified@aditya.ai', password: 'SecurePass1!' })
-    })
-    assert.equal(response.status, 403)
-    const body = await response.json()
-    assert.equal(body.message, 'Please verify your email first.')
-    assert.equal(body.resendOtp, true)
-    assert.equal(body.email, 'unverified@aditya.ai')
-  } finally {
-    await new Promise((resolve, reject) => server.close((error) => (error ? reject(error) : resolve())))
-  }
-})
-
-test('verify-email returns token and logs user in', async () => {
-  const server = await startServer(0)
-  try {
-    const address = server.address()
-    await fetch(`http://127.0.0.1:${address.port}/api/auth/signup`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name: 'Verify Token User', email: 'verifytoken@aditya.ai', password: 'SecurePass1!' })
-    })
-    const user = await getUserByEmail('verifytoken@aditya.ai')
-    assert.ok(user)
-    const response = await fetch(`http://127.0.0.1:${address.port}/api/auth/verify-email`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email: 'verifytoken@aditya.ai', otp: user.emailOtp })
-    })
-    assert.equal(response.status, 200)
-    const body = await response.json()
-    assert.ok(body.token)
-    assert.equal(body.user.isVerified, true)
-    assert.equal(body.user.email, 'verifytoken@aditya.ai')
   } finally {
     await new Promise((resolve, reject) => server.close((error) => (error ? reject(error) : resolve())))
   }
@@ -261,56 +210,6 @@ test('forgot password sends OTP for existing email', async () => {
     assert.equal(response.status, 200)
     const body = await response.json()
     assert.equal(body.ok, true)
-  } finally {
-    await new Promise((resolve, reject) => server.close((error) => (error ? reject(error) : resolve())))
-  }
-})
-
-test('verify email activates account', async () => {
-  const server = await startServer(0)
-  try {
-    const address = server.address()
-    await fetch(`http://127.0.0.1:${address.port}/api/auth/signup`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name: 'VE User', email: 've@aditya.ai', password: 'SecurePass1!' })
-    })
-    await verifyUserByEmail('ve@aditya.ai')
-    const loginRes = await fetch(`http://127.0.0.1:${address.port}/api/auth/login`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email: 've@aditya.ai', password: 'SecurePass1!' })
-    })
-    assert.equal(loginRes.status, 200)
-    const body = await loginRes.json()
-    assert.ok(body.token)
-    assert.equal(body.user.email, 've@aditya.ai')
-  } finally {
-    await new Promise((resolve, reject) => server.close((error) => (error ? reject(error) : resolve())))
-  }
-})
-
-test('resend otp returns cooldown error when called too quickly', async () => {
-  const server = await startServer(0)
-  try {
-    const address = server.address()
-    await fetch(`http://127.0.0.1:${address.port}/api/auth/signup`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name: 'RO User', email: 'ro@aditya.ai', password: 'SecurePass1!' })
-    })
-    const response = await fetch(`http://127.0.0.1:${address.port}/api/auth/resend-otp`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email: 'ro@aditya.ai' })
-    })
-    assert.equal(response.status, 200)
-    const response2 = await fetch(`http://127.0.0.1:${address.port}/api/auth/resend-otp`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email: 'ro@aditya.ai' })
-    })
-    assert.equal(response2.status, 429)
   } finally {
     await new Promise((resolve, reject) => server.close((error) => (error ? reject(error) : resolve())))
   }
