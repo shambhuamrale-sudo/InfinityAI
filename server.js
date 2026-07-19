@@ -238,10 +238,19 @@ function getNodemailerTransporter() {
     nodemailerTransporter = nodemailer.createTransport({
       host: process.env.SMTP_HOST || 'smtp.gmail.com',
       port: Number(process.env.SMTP_PORT) || 587,
-      secure: Number(process.env.SMTP_PORT) === 465,
+      secure: false,
+
       auth: {
         user: process.env.SMTP_USER || '',
         pass: process.env.SMTP_PASS || ''
+      },
+
+      connectionTimeout: 30000,
+      greetingTimeout: 30000,
+      socketTimeout: 30000,
+
+      tls: {
+        rejectUnauthorized: false
       }
     })
   }
@@ -267,7 +276,20 @@ const EmailService = {
       return response.json()
     }
     const transporter = getNodemailerTransporter()
-    const info = await transporter.sendMail({ from: EMAIL_FROM, to, subject, html })
+    try {
+      await transporter.verify()
+      console.log("SMTP Connected Successfully")
+    } catch (err) {
+      console.error("SMTP Verify Failed:", err)
+      throw err
+    }
+
+    const info = await transporter.sendMail({
+      from: EMAIL_FROM,
+      to,
+      subject,
+      html
+    })
     return info
   },
 
@@ -451,7 +473,8 @@ app.post('/api/auth/signup', authLimiter, async (req, res) => {
   try {
     await EmailService.sendVerificationOtp(email, emailOtp)
   } catch (error) {
-    console.error('Failed to send verification email:', error.message)
+    console.error("Failed to send verification email")
+    console.error(error)
   }
 })
 
@@ -496,7 +519,8 @@ app.post('/api/auth/forgot-password', forgotPasswordLimiter, async (req, res) =>
     try {
       await EmailService.sendResetOtp(email, otp)
     } catch (error) {
-      console.error('Failed to send reset email:', error.message)
+      console.error("Failed to send reset email")
+    console.error(error)
     }
   }
   res.json({ ok: true, message: 'If an account exists, a reset OTP has been sent.' })
@@ -575,7 +599,8 @@ app.post('/api/auth/resend-otp', async (req, res) => {
   try {
     await EmailService.sendVerificationOtp(email, otp)
   } catch (error) {
-    console.error('Failed to send verification email:', error.message)
+    console.error("Failed to send verification email")
+    console.error(error)
   }
   res.json({ ok: true, message: 'OTP sent successfully' })
 })
