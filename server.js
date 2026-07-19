@@ -11,6 +11,7 @@ import bcrypt from 'bcryptjs'
 import jwt from 'jsonwebtoken'
 import { z } from 'zod'
 import { MongoClient, ObjectId } from 'mongodb'
+import nodemailer from 'nodemailer'
 import { providerManager, imageProviderManager } from './providers/index.js'
 
 dotenv.config()
@@ -69,9 +70,12 @@ const authLimiter = rateLimit({ windowMs: 60_000, max: 100, standardHeaders: tru
 const forgotPasswordLimiter = rateLimit({ windowMs: 60_000, max: 100, standardHeaders: true, legacyHeaders: false })
 
 const EMAIL_FROM = process.env.EMAIL_FROM || 'InfinityAI <noreply@infinityai.app>'
-const RESEND_API_KEY = process.env.RESEND_API_KEY
-if (!RESEND_API_KEY && IS_PRODUCTION) {
-  console.error('RESEND_API_KEY is required in production.')
+const SMTP_HOST = process.env.SMTP_HOST || 'smtp-relay.brevo.com'
+const SMTP_PORT = Number(process.env.SMTP_PORT || 587)
+const SMTP_USER = process.env.SMTP_USER
+const SMTP_PASS = process.env.SMTP_PASS
+if ((!SMTP_USER || !SMTP_PASS) && IS_PRODUCTION) {
+  console.error('SMTP_USER and SMTP_PASS are required in production.')
   process.exit(1)
 }
 
@@ -235,35 +239,41 @@ function sanitizeUser(user) {
 }
 
 
+const emailTransporter = nodemailer.createTransport({
+  host: SMTP_HOST,
+  port: SMTP_PORT,
+  secure: SMTP_PORT === 465,
+  auth: {
+    user: SMTP_USER,
+    pass: SMTP_PASS
+  }
+})
+
 const EmailService = {
   async send(to, subject, html) {
-    if (!RESEND_API_KEY) throw new Error('RESEND_API_KEY is not configured')
+    if (!SMTP_USER || !SMTP_PASS) throw new Error('SMTP_USER and SMTP_PASS are not configured')
     console.log("EMAIL_FROM:", EMAIL_FROM)
     console.log("EMAIL_TO:", to)
-    console.log("Using RESEND_API_KEY:", !!process.env.RESEND_API_KEY)
-    const requestBody = { from: EMAIL_FROM, to, subject, html }
-    console.log("Resend request body:", JSON.stringify(requestBody))
-    let response
     try {
-      response = await fetch('https://api.resend.com/emails', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${RESEND_API_KEY}`
-        },
-        body: JSON.stringify(requestBody)
-      })
+      await emailTransporter.verify()
+      console.log("SMTP Connected Successfully")
     } catch (err) {
-      console.error("Resend fetch error:", err)
+      console.error("SMTP verification failed:", err)
       throw err
     }
-    console.log("Resend response status:", response.status)
-    const responseText = await response.text()
-    console.log("Resend response body:", responseText)
-    if (!response.ok) {
-      throw new Error(`Resend error ${response.status}: ${responseText}`)
+    try {
+      const info = await emailTransporter.sendMail({
+        from: EMAIL_FROM,
+        to,
+        subject,
+        html
+      })
+      console.log("Email sent:", info.messageId)
+      return info
+    } catch (err) {
+      console.error("SMTP send error:", err)
+      throw err
     }
-    return JSON.parse(responseText)
   },
 
   async sendVerificationOtp(email, otp) {
