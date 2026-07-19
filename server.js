@@ -1,8 +1,5 @@
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import dns from 'node:dns'
-import { lookup } from 'node:dns/promises'
-import net from 'node:net'
 import express from 'express'
 import cors from 'cors'
 import cookieParser from 'cookie-parser'
@@ -14,7 +11,6 @@ import bcrypt from 'bcryptjs'
 import jwt from 'jsonwebtoken'
 import { z } from 'zod'
 import { MongoClient, ObjectId } from 'mongodb'
-import nodemailer from 'nodemailer'
 import { providerManager, imageProviderManager } from './providers/index.js'
 
 dotenv.config()
@@ -72,13 +68,9 @@ app.use('/api/', (req, res, next) => {
 const authLimiter = rateLimit({ windowMs: 60_000, max: 100, standardHeaders: true, legacyHeaders: false })
 const forgotPasswordLimiter = rateLimit({ windowMs: 60_000, max: 100, standardHeaders: true, legacyHeaders: false })
 
-const EMAIL_FROM = process.env.EMAIL_FROM || 'InfinityAI <noreply@infinityai.app>'
-const SMTP_HOST = process.env.SMTP_HOST || 'smtp-relay.brevo.com'
-const SMTP_PORT = Number(process.env.SMTP_PORT || 587)
-const SMTP_USER = process.env.SMTP_USER
-const SMTP_PASS = process.env.SMTP_PASS
-if ((!SMTP_USER || !SMTP_PASS) && IS_PRODUCTION) {
-  console.error('SMTP_USER and SMTP_PASS are required in production.')
+const BREVO_API_KEY = process.env.BREVO_API_KEY
+if ((!BREVO_API_KEY) && IS_PRODUCTION) {
+  console.error('BREVO_API_KEY is required in production.')
   process.exit(1)
 }
 
@@ -242,141 +234,48 @@ function sanitizeUser(user) {
 }
 
 
-console.log('SMTP startup config:', {
-  SMTP_HOST: process.env.SMTP_HOST,
-  SMTP_PORT: process.env.SMTP_PORT,
-  SMTP_USER: process.env.SMTP_USER,
-  NODE_ENV: process.env.NODE_ENV,
-  SMTP_PASS_LENGTH: process.env.SMTP_PASS ? process.env.SMTP_PASS.length : undefined
-})
 
-function tcpProbe(host, port, family) {
-  return new Promise((resolve) => {
-    const opts = { host, port }
-    if (family) opts.family = family
-    const socket = net.connect(opts)
-    const tcpTimeout = setTimeout(() => {
-      console.error(`[STAGE 2 TCP connect] timeout (family=${family || 'auto'})`)
-      socket.destroy()
-      resolve({ ok: false, stage: 'TCP connect', reason: 'timeout' })
-    }, 30000)
-    socket.once('connect', () => {
-      clearTimeout(tcpTimeout)
-      const info = { remoteAddress: socket.remoteAddress, remotePort: socket.remotePort }
-      console.log('[STAGE 2 TCP connect] connected', info)
-      socket.end()
-      resolve({ ok: true, stage: 'TCP connect', info })
-    })
-    socket.once('timeout', () => {
-      clearTimeout(tcpTimeout)
-      console.error(`[STAGE 2 TCP connect] timeout event (family=${family || 'auto'})`)
-      socket.destroy()
-      resolve({ ok: false, stage: 'TCP connect', reason: 'timeout' })
-    })
-    socket.once('error', (err) => {
-      clearTimeout(tcpTimeout)
-      if (err.code === 'ECONNREFUSED') {
-        console.error('[STAGE 2 TCP connect] ECONNREFUSED')
-      } else if (err.code === 'ENOTFOUND') {
-        console.error('[STAGE 2 TCP connect] ENOTFOUND')
-      } else {
-        console.error('[STAGE 2 TCP connect] Socket error:', err)
-      }
-      resolve({ ok: false, stage: 'TCP connect', reason: err.code || err.message })
-    })
-    socket.once('close', (hadError) => {
-      console.log('[STAGE 2 TCP connect] Socket closed. hadError:', hadError)
-    })
-  })
-}
-
-;(async () => {
-  const host = process.env.SMTP_HOST
-  const port = Number(process.env.SMTP_PORT)
-
-  // STAGE 1: DNS
-  try {
-    const dnsResult = await lookup(host)
-    console.log('[STAGE 1 DNS] resolved:', dnsResult)
-  } catch (err) {
-    console.error('[STAGE 1 DNS] lookup error:', err)
-  }
-
-  // STAGE 2: TCP connect (auto family)
-  let tcp = await tcpProbe(host, port)
-
-  // On TCP timeout, retry forcing IPv4 only
-  if (!tcp.ok && tcp.reason === 'timeout') {
-    console.log('[STAGE 2 TCP connect] retrying with family: 4 (IPv4 only)')
-    tcp = await tcpProbe(host, port, 4)
-  }
-
-  // STAGES 3 & 4: TLS handshake + SMTP authentication via transporter.verify()
-  if (tcp.ok) {
-    try {
-      console.log('[STAGE 3/4] running transporter.verify() (TLS handshake + SMTP auth)...')
-      const verifyResult = await emailTransporter.verify()
-      console.log('[STAGE 3/4] transporter.verify() result:', verifyResult)
-    } catch (err) {
-      const code = err.code || ''
-      if (/ECONN|ETIMEDOUT|ESOCKET|ETLS|STARTTLS|UNAVAILABLE/i.test(code) || /handshake|greeting|timeout/i.test(err.message || '')) {
-        console.error('[STAGE 3 TLS handshake] failed:', err.message)
-      } else {
-        console.error('[STAGE 4 SMTP authentication] failed:', err.message)
-      }
-      console.error('[STAGE 3/4] transporter.verify() error:', err)
-      console.error('[STAGE 3/4] transporter.verify() error (full):', {
-        code: err.code,
-        responseCode: err.responseCode,
-        response: err.response,
-        command: err.command,
-        message: err.message
-      })
-    }
-  } else {
-    console.error('[STAGE 3/4] skipped: TCP connect did not succeed')
-  }
-})()
-
-const emailTransporter = nodemailer.createTransport({
-  host: process.env.SMTP_HOST,
-  port: Number(process.env.SMTP_PORT),
-  secure: false,
-  requireTLS: true,
-  auth: {
-    user: process.env.SMTP_USER,
-    pass: process.env.SMTP_PASS
-  },
-  connectionTimeout: 30000,
-  greetingTimeout: 30000,
-  socketTimeout: 30000
-})
 
 const EmailService = {
   async send(to, subject, html) {
-    if (!SMTP_USER || !SMTP_PASS) throw new Error('SMTP_USER and SMTP_PASS are not configured')
-    console.log("EMAIL_FROM:", EMAIL_FROM)
-    console.log("EMAIL_TO:", to)
-    try {
-      await emailTransporter.verify()
-      console.log("SMTP Connected Successfully")
-    } catch (err) {
-      console.error("SMTP verification failed:", err)
-      throw err
+    if (!BREVO_API_KEY) throw new Error('BREVO_API_KEY is not configured')
+    const payload = {
+      sender: {
+        name: 'InfinityAI',
+        email: process.env.EMAIL_FROM
+      },
+      to: [
+        {
+          email: to
+        }
+      ],
+      subject,
+      htmlContent: html
     }
+    const response = await fetch('https://api.brevo.com/v3/smtp/email', {
+      method: 'POST',
+      headers: {
+        'accept': 'application/json',
+        'content-type': 'application/json',
+        'api-key': process.env.BREVO_API_KEY
+      },
+      body: JSON.stringify(payload)
+    })
+    let body
     try {
-      const info = await emailTransporter.sendMail({
-        from: EMAIL_FROM,
-        to,
-        subject,
-        html
-      })
-      console.log("Email sent:", info.messageId)
-      return info
-    } catch (err) {
-      console.error("SMTP send error:", err)
-      throw err
+      body = await response.json()
+    } catch {
+      body = await response.text()
     }
+    if (!response.ok) {
+      const message = typeof body === 'string' ? body : (body?.message || JSON.stringify(body))
+      console.error('HTTP Status:', response.status)
+      console.error('Full response body:', body)
+      console.error('Error message:', message)
+      throw new Error(`Brevo send failed: ${response.status} ${message}`)
+    }
+    console.log('Brevo email sent successfully.')
+    return body
   },
 
   async sendVerificationOtp(email, otp) {
