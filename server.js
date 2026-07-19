@@ -11,7 +11,6 @@ import bcrypt from 'bcryptjs'
 import jwt from 'jsonwebtoken'
 import { z } from 'zod'
 import { MongoClient, ObjectId } from 'mongodb'
-import nodemailer from 'nodemailer'
 import { providerManager, imageProviderManager } from './providers/index.js'
 
 dotenv.config()
@@ -69,9 +68,12 @@ app.use('/api/', (req, res, next) => {
 const authLimiter = rateLimit({ windowMs: 60_000, max: 10, standardHeaders: true, legacyHeaders: false })
 const forgotPasswordLimiter = rateLimit({ windowMs: 60_000, max: 3, standardHeaders: true, legacyHeaders: false })
 
-const EMAIL_PROVIDER = (process.env.EMAIL_PROVIDER || 'nodemailer').toLowerCase()
 const EMAIL_FROM = process.env.EMAIL_FROM || 'InfinityAI <noreply@infinityai.app>'
-const RESEND_API_KEY = process.env.RESEND_API_KEY || ''
+const RESEND_API_KEY = process.env.RESEND_API_KEY
+if (!RESEND_API_KEY && IS_PRODUCTION) {
+  console.error('RESEND_API_KEY is required in production.')
+  process.exit(1)
+}
 
 const defaultPlans = [
   { id: 'free-trial', name: 'Free Trial', price: 0, features: ['2 days access', '20 AI chats/day', '5 AI images/day'] },
@@ -232,65 +234,36 @@ function sanitizeUser(user) {
   return safe
 }
 
-let nodemailerTransporter = null
-function getNodemailerTransporter() {
-  if (!nodemailerTransporter) {
-    nodemailerTransporter = nodemailer.createTransport({
-      host: process.env.SMTP_HOST || 'smtp.gmail.com',
-      port: Number(process.env.SMTP_PORT) || 587,
-      secure: false,
-
-      auth: {
-        user: process.env.SMTP_USER || '',
-        pass: process.env.SMTP_PASS || ''
-      },
-
-      connectionTimeout: 30000,
-      greetingTimeout: 30000,
-      socketTimeout: 30000,
-
-      tls: {
-        rejectUnauthorized: false
-      }
-    })
-  }
-  return nodemailerTransporter
-}
 
 const EmailService = {
   async send(to, subject, html) {
-    if (EMAIL_PROVIDER === 'resend') {
-      if (!RESEND_API_KEY) throw new Error('RESEND_API_KEY is not configured')
-      const response = await fetch('https://api.resend.com/emails', {
+    if (!RESEND_API_KEY) throw new Error('RESEND_API_KEY is not configured')
+    console.log("EMAIL_FROM:", EMAIL_FROM)
+    console.log("EMAIL_TO:", to)
+    console.log("Using RESEND_API_KEY:", !!process.env.RESEND_API_KEY)
+    const requestBody = { from: EMAIL_FROM, to, subject, html }
+    console.log("Resend request body:", JSON.stringify(requestBody))
+    let response
+    try {
+      response = await fetch('https://api.resend.com/emails', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${RESEND_API_KEY}`
         },
-        body: JSON.stringify({ from: EMAIL_FROM, to, subject, html })
+        body: JSON.stringify(requestBody)
       })
-      if (!response.ok) {
-        const errorText = await response.text()
-        throw new Error(`Resend error ${response.status}: ${errorText}`)
-      }
-      return response.json()
-    }
-    const transporter = getNodemailerTransporter()
-    try {
-      await transporter.verify()
-      console.log("SMTP Connected Successfully")
     } catch (err) {
-      console.error("SMTP Verify Failed:", err)
+      console.error("Resend fetch error:", err)
       throw err
     }
-
-    const info = await transporter.sendMail({
-      from: EMAIL_FROM,
-      to,
-      subject,
-      html
-    })
-    return info
+    console.log("Resend response status:", response.status)
+    const responseText = await response.text()
+    console.log("Resend response body:", responseText)
+    if (!response.ok) {
+      throw new Error(`Resend error ${response.status}: ${responseText}`)
+    }
+    return JSON.parse(responseText)
   },
 
   async sendVerificationOtp(email, otp) {
