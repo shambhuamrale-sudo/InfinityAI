@@ -1,6 +1,7 @@
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import dns from 'node:dns'
+import { lookup } from 'node:dns/promises'
 import net from 'node:net'
 import express from 'express'
 import cors from 'cors'
@@ -246,39 +247,95 @@ console.log('SMTP startup config:', {
   SMTP_PORT: process.env.SMTP_PORT,
   SMTP_USER: process.env.SMTP_USER,
   NODE_ENV: process.env.NODE_ENV,
-  SMTP_PASS: process.env.SMTP_PASS ? '***masked***' : undefined
+  SMTP_PASS_LENGTH: process.env.SMTP_PASS ? process.env.SMTP_PASS.length : undefined
 })
 
+function tcpProbe(host, port, family) {
+  return new Promise((resolve) => {
+    const opts = { host, port }
+    if (family) opts.family = family
+    const socket = net.connect(opts)
+    const tcpTimeout = setTimeout(() => {
+      console.error(`[STAGE 2 TCP connect] timeout (family=${family || 'auto'})`)
+      socket.destroy()
+      resolve({ ok: false, stage: 'TCP connect', reason: 'timeout' })
+    }, 30000)
+    socket.once('connect', () => {
+      clearTimeout(tcpTimeout)
+      const info = { remoteAddress: socket.remoteAddress, remotePort: socket.remotePort }
+      console.log('[STAGE 2 TCP connect] connected', info)
+      socket.end()
+      resolve({ ok: true, stage: 'TCP connect', info })
+    })
+    socket.once('timeout', () => {
+      clearTimeout(tcpTimeout)
+      console.error(`[STAGE 2 TCP connect] timeout event (family=${family || 'auto'})`)
+      socket.destroy()
+      resolve({ ok: false, stage: 'TCP connect', reason: 'timeout' })
+    })
+    socket.once('error', (err) => {
+      clearTimeout(tcpTimeout)
+      if (err.code === 'ECONNREFUSED') {
+        console.error('[STAGE 2 TCP connect] ECONNREFUSED')
+      } else if (err.code === 'ENOTFOUND') {
+        console.error('[STAGE 2 TCP connect] ENOTFOUND')
+      } else {
+        console.error('[STAGE 2 TCP connect] Socket error:', err)
+      }
+      resolve({ ok: false, stage: 'TCP connect', reason: err.code || err.message })
+    })
+    socket.once('close', (hadError) => {
+      console.log('[STAGE 2 TCP connect] Socket closed. hadError:', hadError)
+    })
+  })
+}
+
 ;(async () => {
+  const host = process.env.SMTP_HOST
+  const port = Number(process.env.SMTP_PORT)
+
+  // STAGE 1: DNS
   try {
-    const dnsResult = await dns.lookup(process.env.SMTP_HOST)
-    console.log('DNS lookup result:', dnsResult)
+    const dnsResult = await lookup(host)
+    console.log('[STAGE 1 DNS] resolved:', dnsResult)
   } catch (err) {
-    console.error('DNS lookup error:', err)
+    console.error('[STAGE 1 DNS] lookup error:', err)
   }
 
-  const tcpHost = process.env.SMTP_HOST
-  const tcpPort = Number(process.env.SMTP_PORT)
-  const socket = net.createConnection({ host: tcpHost, port: tcpPort })
-  const tcpTimeout = setTimeout(() => {
-    console.error('Connection timeout')
-    socket.destroy()
-  }, 30000)
-  socket.once('connect', () => {
-    clearTimeout(tcpTimeout)
-    console.log('Connected successfully')
-    socket.end()
-  })
-  socket.once('error', (err) => {
-    clearTimeout(tcpTimeout)
-    if (err.code === 'ECONNREFUSED') {
-      console.error('ECONNREFUSED')
-    } else if (err.code === 'ENOTFOUND') {
-      console.error('ENOTFOUND')
-    } else {
-      console.error('Socket error:', err)
+  // STAGE 2: TCP connect (auto family)
+  let tcp = await tcpProbe(host, port)
+
+  // On TCP timeout, retry forcing IPv4 only
+  if (!tcp.ok && tcp.reason === 'timeout') {
+    console.log('[STAGE 2 TCP connect] retrying with family: 4 (IPv4 only)')
+    tcp = await tcpProbe(host, port, 4)
+  }
+
+  // STAGES 3 & 4: TLS handshake + SMTP authentication via transporter.verify()
+  if (tcp.ok) {
+    try {
+      console.log('[STAGE 3/4] running transporter.verify() (TLS handshake + SMTP auth)...')
+      const verifyResult = await emailTransporter.verify()
+      console.log('[STAGE 3/4] transporter.verify() result:', verifyResult)
+    } catch (err) {
+      const code = err.code || ''
+      if (/ECONN|ETIMEDOUT|ESOCKET|ETLS|STARTTLS|UNAVAILABLE/i.test(code) || /handshake|greeting|timeout/i.test(err.message || '')) {
+        console.error('[STAGE 3 TLS handshake] failed:', err.message)
+      } else {
+        console.error('[STAGE 4 SMTP authentication] failed:', err.message)
+      }
+      console.error('[STAGE 3/4] transporter.verify() error:', err)
+      console.error('[STAGE 3/4] transporter.verify() error (full):', {
+        code: err.code,
+        responseCode: err.responseCode,
+        response: err.response,
+        command: err.command,
+        message: err.message
+      })
     }
-  })
+  } else {
+    console.error('[STAGE 3/4] skipped: TCP connect did not succeed')
+  }
 })()
 
 const emailTransporter = nodemailer.createTransport({
