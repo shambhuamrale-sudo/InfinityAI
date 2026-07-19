@@ -1,5 +1,7 @@
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
+import dns from 'node:dns'
+import net from 'node:net'
 import express from 'express'
 import cors from 'cors'
 import cookieParser from 'cookie-parser'
@@ -239,14 +241,58 @@ function sanitizeUser(user) {
 }
 
 
-const emailTransporter = nodemailer.createTransport({
-  host: SMTP_HOST,
-  port: SMTP_PORT,
-  secure: SMTP_PORT === 465,
-  auth: {
-    user: SMTP_USER,
-    pass: SMTP_PASS
+console.log('SMTP startup config:', {
+  SMTP_HOST: process.env.SMTP_HOST,
+  SMTP_PORT: process.env.SMTP_PORT,
+  SMTP_USER: process.env.SMTP_USER,
+  NODE_ENV: process.env.NODE_ENV,
+  SMTP_PASS: process.env.SMTP_PASS ? '***masked***' : undefined
+})
+
+;(async () => {
+  try {
+    const dnsResult = await dns.lookup(process.env.SMTP_HOST)
+    console.log('DNS lookup result:', dnsResult)
+  } catch (err) {
+    console.error('DNS lookup error:', err)
   }
+
+  const tcpHost = process.env.SMTP_HOST
+  const tcpPort = Number(process.env.SMTP_PORT)
+  const socket = net.createConnection({ host: tcpHost, port: tcpPort })
+  const tcpTimeout = setTimeout(() => {
+    console.error('Connection timeout')
+    socket.destroy()
+  }, 30000)
+  socket.once('connect', () => {
+    clearTimeout(tcpTimeout)
+    console.log('Connected successfully')
+    socket.end()
+  })
+  socket.once('error', (err) => {
+    clearTimeout(tcpTimeout)
+    if (err.code === 'ECONNREFUSED') {
+      console.error('ECONNREFUSED')
+    } else if (err.code === 'ENOTFOUND') {
+      console.error('ENOTFOUND')
+    } else {
+      console.error('Socket error:', err)
+    }
+  })
+})()
+
+const emailTransporter = nodemailer.createTransport({
+  host: process.env.SMTP_HOST,
+  port: Number(process.env.SMTP_PORT),
+  secure: false,
+  requireTLS: true,
+  auth: {
+    user: process.env.SMTP_USER,
+    pass: process.env.SMTP_PASS
+  },
+  connectionTimeout: 30000,
+  greetingTimeout: 30000,
+  socketTimeout: 30000
 })
 
 const EmailService = {
