@@ -84,16 +84,17 @@ function ChatMarkdown({ content }) {
     let lastIndex = 0
     let match
     let codeIndex = 0
+    let textIndex = 0
 
     while ((match = codeBlockRegex.exec(remaining)) !== null) {
       if (match.index > lastIndex) {
-        blocks.push({ type: 'text', content: remaining.slice(lastIndex, match.index) })
+        blocks.push({ type: 'text', content: remaining.slice(lastIndex, match.index), id: `text-${textIndex++}` })
       }
       blocks.push({ type: 'code', language: match[1] || 'text', content: match[2], id: `code-${codeIndex++}` })
       lastIndex = match.index + match[0].length
     }
     if (lastIndex < remaining.length) {
-      blocks.push({ type: 'text', content: remaining.slice(lastIndex) })
+      blocks.push({ type: 'text', content: remaining.slice(lastIndex), id: `text-${textIndex++}` })
     }
 
     return blocks.map((block) => {

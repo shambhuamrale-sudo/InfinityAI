@@ -17,6 +17,7 @@ const modules = [
 
 export default function AdminPage() {
   const { adminConfig, setAdminConfig, user, auth } = useAppContext()
+  const isAdmin = String(auth.user?.role || user?.role || '').toLowerCase().includes('admin')
   const [trialDays, setTrialDays] = useState(adminConfig.trialDays || 2)
   const [chatLimit, setChatLimit] = useState(adminConfig.planLimits?.['free-trial']?.maxChatsPerDay || 20)
   const [imageLimit, setImageLimit] = useState(adminConfig.planLimits?.['free-trial']?.maxImagesPerDay || 5)
@@ -35,7 +36,7 @@ export default function AdminPage() {
     return Object.entries(adminConfig.providerStatuses || {}).map(([name, status]) => `${name}: ${status}`).join(' • ')
   }, [adminConfig.providerStatuses])
 
-  if (!auth.loading && (!auth.isAuthenticated || auth.user?.role !== 'admin')) {
+  if (!auth.loading && (!auth.isAuthenticated || !isAdmin)) {
     return (
       <div className="app-canvas relative flex min-h-screen items-center justify-center overflow-hidden px-4 text-white">
         <BackgroundEffects />
@@ -55,7 +56,7 @@ export default function AdminPage() {
         <div className="max-w-3xl">
           <p className="text-sm uppercase tracking-[0.35em] text-indigo-300">Admin Dashboard</p>
           <h1 className="mt-3 text-4xl font-semibold tracking-tight sm:text-5xl">Steer growth from a premium control center</h1>
-          <p className="mt-5 text-lg leading-8 text-slate-400">{user ? `Signed in as ${user.name} (${user.email})` : 'The admin area now supports plan and limit adjustments directly from the UI.'}</p>
+          <p className="mt-5 text-lg leading-8 text-slate-400">{auth.user ? `Signed in as ${auth.user.name} (${auth.user.email})` : 'The admin area now supports plan and limit adjustments directly from the UI.'}</p>
         </div>
 
         <div className="mt-10 grid gap-6 md:grid-cols-2 xl:grid-cols-3">

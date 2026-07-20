@@ -1,5 +1,5 @@
 import { motion } from 'framer-motion'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useLocation } from 'react-router-dom'
 import {
   LayoutGrid, MessageSquareText, ImagePlus, Sparkles, Code2, FileText, Languages,
   History, GalleryHorizontalEnd, Bookmark, Crown, Bell, Settings, ShieldCheck, PanelLeftClose, PanelLeftOpen
@@ -25,10 +25,11 @@ const NAV = [
 
 export default function DashboardSidebar({ collapsed, onToggle }) {
   const navigate = useNavigate()
+  const location = useLocation()
   const { user } = useAppContext()
   const isAdmin = String(user?.role || '').toLowerCase().includes('admin')
   const items = isAdmin ? [...NAV, { label: 'Admin', icon: ShieldCheck, route: '/admin' }] : NAV
-  const path = window.location.pathname
+  const path = location.pathname
 
   const surface = 'border-white/8 bg-[#0a0c14]/80'
   const muted = 'text-slate-400'

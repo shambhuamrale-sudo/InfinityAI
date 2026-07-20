@@ -1,17 +1,18 @@
 import assert from 'node:assert/strict'
-import test from 'node:test'
-import { startServer } from './server.js'
+import test, { after } from 'node:test'
+import { startServer, stopMemoryServer } from './server.js'
 
 test('health endpoint returns ok', async () => {
   const server = await startServer(0)
   try {
     const address = server.address()
+    assert.ok(address, 'server.address() should not be null')
     const response = await fetch(`http://127.0.0.1:${address.port}/api/health`)
     assert.equal(response.status, 200)
     const body = await response.json()
     assert.equal(body.ok, true)
   } finally {
-    await new Promise((resolve, reject) => server.close((error) => (error ? reject(error) : resolve())))
+    await closeServer(server)
   }
 })
 
@@ -19,6 +20,7 @@ test('signup creates a user without token', async () => {
   const server = await startServer(0)
   try {
     const address = server.address()
+    assert.ok(address, 'server.address() should not be null')
     const response = await fetch(`http://127.0.0.1:${address.port}/api/auth/signup`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -29,9 +31,9 @@ test('signup creates a user without token', async () => {
     assert.equal(body.user.email, 'test@aditya.ai')
     assert.equal(body.user.role, 'user')
     assert.equal(body.user.isVerified, true)
-    assert.equal(body.token, undefined)
+    assert.ok(!('token' in body), 'signup should not return a token')
   } finally {
-    await new Promise((resolve, reject) => server.close((error) => (error ? reject(error) : resolve())))
+    await closeServer(server)
   }
 })
 
@@ -39,6 +41,7 @@ test('signup rejects weak password', async () => {
   const server = await startServer(0)
   try {
     const address = server.address()
+    assert.ok(address, 'server.address() should not be null')
     const weakPasswords = [
       { password: 'short', reason: 'too short' },
       { password: 'all lowercase', reason: 'no uppercase' },
@@ -56,7 +59,7 @@ test('signup rejects weak password', async () => {
       assert.equal(response.status, 400, `Expected 400 for password: ${password}`)
     }
   } finally {
-    await new Promise((resolve, reject) => server.close((error) => (error ? reject(error) : resolve())))
+    await closeServer(server)
   }
 })
 
@@ -64,6 +67,7 @@ test('login returns token for valid credentials', async () => {
   const server = await startServer(0)
   try {
     const address = server.address()
+    assert.ok(address, 'server.address() should not be null')
     await fetch(`http://127.0.0.1:${address.port}/api/auth/signup`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -79,7 +83,7 @@ test('login returns token for valid credentials', async () => {
     assert.ok(body.token)
     assert.equal(body.user.email, 'login@aditya.ai')
   } finally {
-    await new Promise((resolve, reject) => server.close((error) => (error ? reject(error) : resolve())))
+    await closeServer(server)
   }
 })
 
@@ -87,6 +91,7 @@ test('rejects duplicate signup', async () => {
   const server = await startServer(0)
   try {
     const address = server.address()
+    assert.ok(address, 'server.address() should not be null')
     await fetch(`http://127.0.0.1:${address.port}/api/auth/signup`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -99,7 +104,7 @@ test('rejects duplicate signup', async () => {
     })
     assert.equal(response.status, 409)
   } finally {
-    await new Promise((resolve, reject) => server.close((error) => (error ? reject(error) : resolve())))
+    await closeServer(server)
   }
 })
 
@@ -107,6 +112,7 @@ test('admin config is protected', async () => {
   const server = await startServer(0)
   try {
     const address = server.address()
+    assert.ok(address, 'server.address() should not be null')
     const response = await fetch(`http://127.0.0.1:${address.port}/api/admin/config`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -114,7 +120,7 @@ test('admin config is protected', async () => {
     })
     assert.equal(response.status, 403)
   } finally {
-    await new Promise((resolve, reject) => server.close((error) => (error ? reject(error) : resolve())))
+    await closeServer(server)
   }
 })
 
@@ -122,6 +128,7 @@ test('/api/image generates a local image (backward compatible)', async () => {
   const server = await startServer(0)
   try {
     const address = server.address()
+    assert.ok(address, 'server.address() should not be null')
     const response = await fetch(`http://127.0.0.1:${address.port}/api/image`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -134,7 +141,7 @@ test('/api/image generates a local image (backward compatible)', async () => {
     assert.equal(typeof body.text, 'string', 'legacy text field preserved')
     assert.equal(body.provider, 'local')
   } finally {
-    await new Promise((resolve, reject) => server.close((error) => (error ? reject(error) : resolve())))
+    await closeServer(server)
   }
 })
 
@@ -142,6 +149,7 @@ test('/api/image defaults to the local provider when none is given', async () =>
   const server = await startServer(0)
   try {
     const address = server.address()
+    assert.ok(address, 'server.address() should not be null')
     const response = await fetch(`http://127.0.0.1:${address.port}/api/image`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -151,7 +159,7 @@ test('/api/image defaults to the local provider when none is given', async () =>
     const body = await response.json()
     assert.equal(body.provider, 'local')
   } finally {
-    await new Promise((resolve, reject) => server.close((error) => (error ? reject(error) : resolve())))
+    await closeServer(server)
   }
 })
 
@@ -159,6 +167,7 @@ test('/api/image/edit returns a preview for placeholder providers', async () => 
   const server = await startServer(0)
   try {
     const address = server.address()
+    assert.ok(address, 'server.address() should not be null')
     const response = await fetch(`http://127.0.0.1:${address.port}/api/image/edit`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -169,7 +178,7 @@ test('/api/image/edit returns a preview for placeholder providers', async () => 
     assert.ok(Array.isArray(body.images) && body.images.length === 1)
     assert.equal(body.operation, 'upscale')
   } finally {
-    await new Promise((resolve, reject) => server.close((error) => (error ? reject(error) : resolve())))
+    await closeServer(server)
   }
 })
 
@@ -177,6 +186,7 @@ test('image provider discovery endpoints respond', async () => {
   const server = await startServer(0)
   try {
     const address = server.address()
+    assert.ok(address, 'server.address() should not be null')
     const base = `http://127.0.0.1:${address.port}`
     for (const path of ['/api/image/providers', '/api/image/providers/models', '/api/image/providers/availability', '/api/image/providers/capabilities']) {
       const res = await fetch(`${base}${path}`)
@@ -189,7 +199,7 @@ test('image provider discovery endpoints respond', async () => {
     const rpBody = await rp.json()
     assert.equal(typeof rpBody.prompt, 'string')
   } finally {
-    await new Promise((resolve, reject) => server.close((error) => (error ? reject(error) : resolve())))
+    await closeServer(server)
   }
 })
 
@@ -197,6 +207,7 @@ test('forgot password sends OTP for existing email', async () => {
   const server = await startServer(0)
   try {
     const address = server.address()
+    assert.ok(address, 'server.address() should not be null')
     await fetch(`http://127.0.0.1:${address.port}/api/auth/signup`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -211,6 +222,22 @@ test('forgot password sends OTP for existing email', async () => {
     const body = await response.json()
     assert.equal(body.ok, true)
   } finally {
-    await new Promise((resolve, reject) => server.close((error) => (error ? reject(error) : resolve())))
+    await closeServer(server)
   }
+})
+
+function closeServer(server) {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error('Server close timeout')), 5000)
+    server.close((error) => {
+      clearTimeout(timer)
+      if (error) reject(error)
+      else resolve()
+    })
+  })
+}
+
+after(async () => {
+  await stopMemoryServer()
+  setTimeout(() => process.exit(0), 100)
 })

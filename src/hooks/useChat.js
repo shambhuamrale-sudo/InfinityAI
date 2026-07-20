@@ -1,7 +1,35 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import jsPDF from 'jspdf'
 
-const apiBase = import.meta.env.VITE_API_BASE_URL || '/api'
+const API_BASE = import.meta.env.VITE_API_BASE_URL || '/api'
+
+// rAF-based throttle: coalesces high-frequency streaming updates to ~60fps so
+// React re-renders are capped regardless of token arrival rate.
+const FRAME_MS = 16
+function createFrameThrottle() {
+  let pending = null
+  let scheduled = false
+  let lastRun = 0
+  return (value, apply) => {
+    pending = value
+    if (scheduled) return
+    scheduled = true
+    const run = (now) => {
+      scheduled = false
+      lastRun = now
+      if (pending !== null) {
+        apply(pending)
+        pending = null
+      }
+    }
+    const elapsed = performance.now() - lastRun
+    if (typeof requestAnimationFrame === 'function' && elapsed >= FRAME_MS) {
+      requestAnimationFrame(run)
+    } else {
+      setTimeout(() => run(performance.now()), Math.max(0, FRAME_MS - elapsed))
+    }
+  }
+}
 
 export function useChat() {
   const [conversationId, setConversationId] = useState(null)
@@ -48,9 +76,17 @@ export function useChat() {
     }
   }, [showSearch])
 
+  // Ensure any in-flight request is aborted when the component unmounts.
+  useEffect(() => {
+    return () => {
+      controllerRef.current?.abort()
+      controllerRef.current = null
+    }
+  }, [])
+
   const loadConversations = async () => {
     try {
-      const res = await fetch(`${apiBase}/conversations`, { credentials: 'include' })
+      const res = await fetch(`${API_BASE}/conversations`, { credentials: 'include' })
       if (res.ok) {
         const data = await res.json()
         setConversations(data.conversations || [])
@@ -62,7 +98,7 @@ export function useChat() {
 
   const createConversation = async (title, initialMessages = []) => {
     try {
-      const res = await fetch(`${apiBase}/conversations`, {
+      const res = await fetch(`${API_BASE}/conversations`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
@@ -83,7 +119,7 @@ export function useChat() {
 
   const selectConversation = async (id) => {
     try {
-      const res = await fetch(`${apiBase}/conversations/${id}`, { credentials: 'include' })
+      const res = await fetch(`${API_BASE}/conversations/${id}`, { credentials: 'include' })
       if (res.ok) {
         const data = await res.json()
         setConversationId(data.conversation.id)
@@ -96,7 +132,7 @@ export function useChat() {
 
   const updateConversation = async (id, updates) => {
     try {
-      const res = await fetch(`${apiBase}/conversations/${id}`, {
+      const res = await fetch(`${API_BASE}/conversations/${id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
@@ -113,7 +149,7 @@ export function useChat() {
 
   const deleteConversation = async (id) => {
     try {
-      const res = await fetch(`${apiBase}/conversations/${id}`, { method: 'DELETE', credentials: 'include' })
+      const res = await fetch(`${API_BASE}/conversations/${id}`, { method: 'DELETE', credentials: 'include' })
       if (res.ok) {
         const data = await res.json()
         setConversations(data.conversations)
@@ -129,7 +165,7 @@ export function useChat() {
 
   const duplicateConversation = async (id) => {
     try {
-      const res = await fetch(`${apiBase}/conversations/${id}/duplicate`, { method: 'POST', credentials: 'include' })
+      const res = await fetch(`${API_BASE}/conversations/${id}/duplicate`, { method: 'POST', credentials: 'include' })
       if (res.ok) {
         const data = await res.json()
         setConversations(data.conversations)
@@ -150,6 +186,9 @@ export function useChat() {
     setStreamingText('')
     setStreamingStatus('streaming')
 
+    // Cancel any still-pending generation before starting a new one.
+    controllerRef.current?.abort()
+
     const abort = new AbortController()
     controllerRef.current = abort
 
@@ -158,7 +197,7 @@ export function useChat() {
 
     try {
       if (useStreaming) {
-        const response = await fetch(`${apiBase}/chat`, {
+        const response = await fetch(`${API_BASE}/chat`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -175,12 +214,25 @@ export function useChat() {
         const reader = response.body?.getReader?.()
         const decoder = new TextDecoder()
         let fullText = ''
+        // Coalesce DOM writes to one per animation frame (~60fps).
+        const flush = createFrameThrottle()
+        const applyStream = (text) => {
+          setStreamingText(text)
+          setMessages((prev) => {
+            const next = [...prev]
+            const last = next[next.length - 1]
+            if (last?.role === 'assistant') next[next.length - 1] = { ...last, content: text }
+            return next
+          })
+        }
         if (reader) {
+          let buffer = ''
           while (true) {
             const { done, value } = await reader.read()
             if (done) break
-            const chunk = decoder.decode(value, { stream: true })
-            const lines = chunk.split('\n')
+            buffer += decoder.decode(value, { stream: true })
+            const lines = buffer.split('\n')
+            buffer = lines.pop() || ''
             for (const line of lines) {
               if (line.startsWith('data: ')) {
                 const data = line.slice(6).trim()
@@ -189,12 +241,7 @@ export function useChat() {
                   const parsed = JSON.parse(data)
                   if (parsed.text) {
                     fullText += parsed.text
-                    setStreamingText(fullText)
-                    setMessages((prev) => {
-                      const next = [...prev]
-                      next[next.length - 1] = { ...next[next.length - 1], content: fullText }
-                      return next
-                    })
+                    flush(fullText, applyStream)
                   }
                   if (parsed.error) throw new Error(parsed.error)
                 } catch (parseError) {
@@ -205,16 +252,26 @@ export function useChat() {
               }
             }
           }
+          if (buffer.trim()) {
+            const line = buffer.trim()
+            if (line.startsWith('data: ')) {
+              const data = line.slice(6).trim()
+              if (data !== '[DONE]') {
+                try {
+                  const parsed = JSON.parse(data)
+                  if (parsed.text) {
+                    fullText += parsed.text
+                    flush(fullText, applyStream)
+                  }
+                } catch {}
+              }
+            }
+          }
         } else {
           const data = await response.json()
           fullText = data.text || data.response || ''
-          setStreamingText(fullText)
-          setMessages((prev) => {
-            const next = [...prev]
-            next[next.length - 1] = { ...next[next.length - 1], content: fullText }
-            return next
-          })
         }
+        applyStream(fullText)
         setStreamingStatus('idle')
         setStreamingText('')
         setMessages((prev) => {
@@ -223,7 +280,7 @@ export function useChat() {
           return next
         })
       } else {
-        const response = await fetch(`${apiBase}/chat`, {
+        const response = await fetch(`${API_BASE}/chat`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -258,22 +315,29 @@ export function useChat() {
       setLoading(false)
       setStreamingStatus('idle')
       setStreamingText('')
-      controllerRef.current = null
-      if (conversationId) {
-        const last = messages[messages.length - 1]
-        if (last) {
-          updateConversation(conversationId, { messages: [...messages, userMessage] })
+      if (controllerRef.current === abort) {
+        controllerRef.current = null
+      }
+      if (!err || err.name !== 'AbortError') {
+        if (conversationId) {
+          const current = messagesRef.current
+          const trimmed = current.filter((m) => !(m.role === 'assistant' && m.status === 'streaming'))
+          if (trimmed.length > 0 || current.length > 0) {
+            updateConversation(conversationId, { messages: trimmed })
+          }
         }
       }
     }
   }
 
   const stopGeneration = () => {
-    controllerRef.current?.abort()
+    if (controllerRef.current) {
+      controllerRef.current.abort()
+      controllerRef.current = null
+    }
     setLoading(false)
     setStreamingStatus('idle')
     setStreamingText('')
-    controllerRef.current = null
     setMessages((prev) => {
       if (prev.length === 0) return prev
       const next = [...prev]
@@ -330,7 +394,11 @@ export function useChat() {
         xhr.addEventListener('load', () => {
           setUploadProgress((prev) => ({ ...prev, [file.name]: -1 }))
           if (xhr.status >= 200 && xhr.status < 300) {
-            resolve(JSON.parse(xhr.responseText))
+            try {
+              resolve(JSON.parse(xhr.responseText))
+            } catch {
+              reject(new Error('Invalid server response'))
+            }
           } else {
             reject(new Error(`Upload failed: ${xhr.status}`))
           }
@@ -340,11 +408,12 @@ export function useChat() {
           reject(new Error('Upload failed'))
         })
       })
-      xhr.open('POST', `${apiBase}/chat/upload`)
+      xhr.open('POST', `${API_BASE}/chat/upload`)
       xhr.send(formData)
       const result = await promise
-      setAttachments((prev) => [...prev, result.attachment])
-      return result.attachment
+      const { data: _data, ...safeAttachment } = result.attachment || {}
+      setAttachments((prev) => [...prev, safeAttachment])
+      return safeAttachment
     } catch (e) {
       console.warn('Attachment upload failed', e)
       setUploadProgress((prev) => ({ ...prev, [file.name]: -1 }))
@@ -360,7 +429,7 @@ export function useChat() {
     if (!conversationId) return null
     try {
       if (format === 'pdf') {
-        const res = await fetch(`${apiBase}/conversations/${conversationId}`, { credentials: 'include' })
+        const res = await fetch(`${API_BASE}/conversations/${conversationId}`, { credentials: 'include' })
         if (!res.ok) throw new Error('Export failed')
         const data = await res.json()
         const conversation = data.conversation
@@ -382,7 +451,7 @@ export function useChat() {
         doc.save(`${(conversation.title || 'conversation').replace(/[^a-z0-9]/gi, '_')}.pdf`)
         return true
       }
-      const res = await fetch(`${apiBase}/conversations/${conversationId}/export?format=${format}`, { credentials: 'include' })
+      const res = await fetch(`${API_BASE}/conversations/${conversationId}/export?format=${format}`, { credentials: 'include' })
       if (!res.ok) throw new Error('Export failed')
       const blob = await res.blob()
       const url = URL.createObjectURL(blob)

@@ -32,8 +32,8 @@ export function AppProvider({ children }) {
   useEffect(() => {
     const hydrateAuth = async () => {
       try {
-        const apiBase = import.meta.env.VITE_API_BASE_URL || ''
-        const response = await fetch(`${apiBase}/api/auth/me`, { credentials: 'include' })
+        const apiBase = import.meta.env.VITE_API_BASE_URL || '/api'
+        const response = await fetch(`${apiBase}/auth/me`, { credentials: 'include' })
         if (response.ok) {
           const data = await response.json()
           setAuth({ user: data.user || null, isAuthenticated: true, loading: false })
@@ -64,11 +64,11 @@ export function AppProvider({ children }) {
       }
 
       try {
-        const apiBase = import.meta.env.VITE_API_BASE_URL || ''
+        const apiBase = import.meta.env.VITE_API_BASE_URL || '/api'
         const [plansRes, configRes, serverStateRes] = await Promise.all([
-          fetch(`${apiBase}/api/plans`),
-          fetch(`${apiBase}/api/config`),
-          fetch(`${apiBase}/api/state`)
+          fetch(`${apiBase}/plans`, { credentials: 'include' }),
+          fetch(`${apiBase}/config`, { credentials: 'include' }),
+          fetch(`${apiBase}/state`, { credentials: 'include' })
         ])
         if (plansRes.ok) {
           const plans = await plansRes.json()
@@ -97,12 +97,13 @@ export function AppProvider({ children }) {
     let timeoutId
     const persistState = { ...state, toasts: [] }
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(persistState))
-    const apiBase = import.meta.env.VITE_API_BASE_URL || ''
+    const apiBase = import.meta.env.VITE_API_BASE_URL || '/api'
     timeoutId = window.setTimeout(() => {
-      fetch(`${apiBase}/api/state`, {
+      fetch(`${apiBase}/state`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(persistState)
+        body: JSON.stringify(persistState),
+        credentials: 'include'
       }).catch(() => {})
     }, 800)
     return () => window.clearTimeout(timeoutId)
@@ -333,6 +334,28 @@ export function AppProvider({ children }) {
     addToast({ kind: 'success', title: 'Preferences updated', message: 'Your workspace settings have been saved.' })
   }
 
+  const toggleDarkMode = () => {
+    const next = !state.preferences.darkMode
+    setState((prev) => ({ ...prev, preferences: { ...prev.preferences, darkMode: next } }))
+  }
+
+  const setDarkMode = (value) => {
+    setState((prev) => ({ ...prev, preferences: { ...prev.preferences, darkMode: Boolean(value) } }))
+  }
+
+  // Reflect the theme preference onto <html> so CSS variables switch.
+  useEffect(() => {
+    const root = typeof document !== 'undefined' ? document.documentElement : null
+    if (!root) return
+    if (state.preferences.darkMode) {
+      root.classList.add('dark')
+      root.classList.remove('light')
+    } else {
+      root.classList.add('light')
+      root.classList.remove('dark')
+    }
+  }, [state.preferences.darkMode])
+
   // Silent preference update (no toast) — used by the model selector, which can
   // change frequently and should not spam notifications.
   const setChatModelSelection = ({ provider, model }) => {
@@ -352,96 +375,123 @@ export function AppProvider({ children }) {
   }
 
   const login = async (email, password) => {
-    const apiBase = import.meta.env.VITE_API_BASE_URL || ''
-    const response = await fetch(`${apiBase}/api/auth/login`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, password }),
-      credentials: 'include'
-    })
-    const data = await response.json()
-    if (!response.ok) {
-      const error = getErrorMessage(data)
-      addToast({ kind: 'error', title: 'Login failed', message: error })
-      return { success: false, error }
+    const apiBase = import.meta.env.VITE_API_BASE_URL || '/api'
+    try {
+      const response = await fetch(`${apiBase}/auth/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password }),
+        credentials: 'include'
+      })
+      const data = await response.json()
+      if (!response.ok) {
+        const error = getErrorMessage(data)
+        addToast({ kind: 'error', title: 'Login failed', message: error })
+        return { success: false, error }
+      }
+      setAuth({ user: data.user, isAuthenticated: true, loading: false })
+      setState((prev) => ({ ...prev, user: { ...prev.user, ...data.user } }))
+      addToast({ kind: 'success', title: 'Welcome back', message: 'You are now signed in.' })
+      return { success: true, user: data.user }
+    } catch {
+      addToast({ kind: 'error', title: 'Login failed', message: 'Network error. Please check your connection.' })
+      return { success: false, error: 'Network error' }
     }
-    setAuth({ user: data.user, isAuthenticated: true, loading: false })
-    setState((prev) => ({ ...prev, user: { ...prev.user, ...data.user } }))
-    addToast({ kind: 'success', title: 'Welcome back', message: 'You are now signed in.' })
-    return { success: true, user: data.user }
   }
 
   const signup = async (name, email, password) => {
-    const apiBase = import.meta.env.VITE_API_BASE_URL || ''
-    const response = await fetch(`${apiBase}/api/auth/signup`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name, email, password }),
-      credentials: 'include'
-    })
-    const data = await response.json()
-    if (!response.ok) {
-      const error = getErrorMessage(data)
-      addToast({ kind: 'error', title: 'Signup failed', message: error })
-      return { success: false, error }
+    const apiBase = import.meta.env.VITE_API_BASE_URL || '/api'
+    try {
+      const response = await fetch(`${apiBase}/auth/signup`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, email, password }),
+        credentials: 'include'
+      })
+      const data = await response.json()
+      if (!response.ok) {
+        const error = getErrorMessage(data)
+        addToast({ kind: 'error', title: 'Signup failed', message: error })
+        return { success: false, error }
+      }
+      setAuth({ user: data.user, isAuthenticated: true, loading: false })
+      setState((prev) => ({ ...prev, user: { ...prev.user, ...data.user } }))
+      addToast({ kind: 'success', title: 'Account created', message: 'Welcome to InfinityAI.' })
+      return { success: true, user: data.user }
+    } catch {
+      addToast({ kind: 'error', title: 'Signup failed', message: 'Network error. Please check your connection.' })
+      return { success: false, error: 'Network error' }
     }
-    addToast({ kind: 'success', title: 'Account created', message: 'Welcome to InfinityAI.' })
-    return { success: true, user: data.user }
   }
 
   const forgotPassword = async (email) => {
-    const apiBase = import.meta.env.VITE_API_BASE_URL || ''
-    const response = await fetch(`${apiBase}/api/auth/forgot-password`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email }),
-      credentials: 'include'
-    })
-    const data = await response.json()
-    if (!response.ok) {
-      const error = getErrorMessage(data)
-      return { success: false, error }
+    const apiBase = import.meta.env.VITE_API_BASE_URL || '/api'
+    try {
+      const response = await fetch(`${apiBase}/auth/forgot-password`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email }),
+        credentials: 'include'
+      })
+      const data = await response.json()
+      if (!response.ok) {
+        const error = getErrorMessage(data)
+        return { success: false, error }
+      }
+      addToast({ kind: 'success', title: 'OTP sent', message: 'Check your email for the reset code.' })
+      return { success: true }
+    } catch {
+      addToast({ kind: 'error', title: 'OTP failed', message: 'Network error. Please try again.' })
+      return { success: false, error: 'Network error' }
     }
-    addToast({ kind: 'success', title: 'OTP sent', message: 'Check your email for the reset code.' })
-    return { success: true }
   }
 
   const verifyResetOtp = async (email, otp) => {
-    const apiBase = import.meta.env.VITE_API_BASE_URL || ''
-    const response = await fetch(`${apiBase}/api/auth/verify-reset-otp`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, otp }),
-      credentials: 'include'
-    })
-    const data = await response.json()
-    if (!response.ok) {
-      const error = getErrorMessage(data)
-      return { success: false, error }
+    const apiBase = import.meta.env.VITE_API_BASE_URL || '/api'
+    try {
+      const response = await fetch(`${apiBase}/auth/verify-reset-otp`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, otp }),
+        credentials: 'include'
+      })
+      const data = await response.json()
+      if (!response.ok) {
+        const error = getErrorMessage(data)
+        return { success: false, error }
+      }
+      return { success: true }
+    } catch {
+      addToast({ kind: 'error', title: 'Verification failed', message: 'Network error. Please try again.' })
+      return { success: false, error: 'Network error' }
     }
-    return { success: true }
   }
 
   const resetPassword = async (email, otp, password) => {
-    const apiBase = import.meta.env.VITE_API_BASE_URL || ''
-    const response = await fetch(`${apiBase}/api/auth/reset-password`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, otp, password }),
-      credentials: 'include'
-    })
-    const data = await response.json()
-    if (!response.ok) {
-      const error = getErrorMessage(data)
-      return { success: false, error }
+    const apiBase = import.meta.env.VITE_API_BASE_URL || '/api'
+    try {
+      const response = await fetch(`${apiBase}/auth/reset-password`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, otp, password }),
+        credentials: 'include'
+      })
+      const data = await response.json()
+      if (!response.ok) {
+        const error = getErrorMessage(data)
+        return { success: false, error }
+      }
+      addToast({ kind: 'success', title: 'Password reset', message: 'You can now log in with your new password.' })
+      return { success: true }
+    } catch {
+      addToast({ kind: 'error', title: 'Reset failed', message: 'Network error. Please try again.' })
+      return { success: false, error: 'Network error' }
     }
-    addToast({ kind: 'success', title: 'Password reset', message: 'You can now log in with your new password.' })
-    return { success: true }
   }
 
   const logout = async () => {
-    const apiBase = import.meta.env.VITE_API_BASE_URL || ''
-    await fetch(`${apiBase}/api/auth/logout`, { method: 'POST', credentials: 'include' }).catch(() => {})
+    const apiBase = import.meta.env.VITE_API_BASE_URL || '/api'
+      await fetch(`${apiBase}/auth/logout`, { method: 'POST', credentials: 'include' }).catch(() => {})
     setAuth({ user: null, isAuthenticated: false, loading: false })
     setState((prev) => ({ ...prev, user: createDefaultState().user }))
     addToast({ kind: 'info', title: 'Signed out', message: 'You have been logged out securely.' })
@@ -478,6 +528,8 @@ export function AppProvider({ children }) {
     updatePreferences,
     setChatModelSelection,
     updateUserProfile,
+    toggleDarkMode,
+    setDarkMode,
     addToast,
     dismissToast,
     setCommandPaletteOpen: (value) => setState((prev) => ({ ...prev, ui: { ...prev.ui, commandPaletteOpen: value } })),

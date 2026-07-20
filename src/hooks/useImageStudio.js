@@ -13,6 +13,8 @@ export function getCachedImage(key) {
   return imageCache.get(key)
 }
 
+const MAX_RETRIES = 2
+
 /**
  * useImageStudio
  * --------------
@@ -21,6 +23,8 @@ export function getCachedImage(key) {
  *   - text-to-image generation with progress + cancelation
  *   - AI editing (img2img, upscale, bg-removal, inpaint, outpaint, …)
  *   - random prompt generation
+ *   - a small generation queue (batch operations) with per-image progress
+ *   - retry logic for failed generations
  *
  * The hook never throws for expected failures; callers get a normalized result.
  */
@@ -30,6 +34,8 @@ export function useImageStudio() {
   const [generating, setGenerating] = useState(false)
   const [progress, setProgress] = useState(0)
   const [error, setError] = useState(null)
+  const [queue, setQueue] = useState([])
+  const [batchProgress, setBatchProgress] = useState(null)
   const controllerRef = useRef(null)
   const progressTimerRef = useRef(null)
 
@@ -74,6 +80,18 @@ export function useImageStudio() {
     window.setTimeout(() => setProgress(0), 600)
   }, [])
 
+  const request = useCallback(async (path, params, signal) => {
+    const res = await fetch(`${apiBase}${path}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(params),
+      credentials: 'include',
+      signal
+    })
+    if (!res.ok) throw new Error(`HTTP ${res.status}`)
+    return res.json()
+  }, [])
+
   const generate = useCallback(async (params) => {
     setError(null)
     setGenerating(true)
@@ -81,15 +99,16 @@ export function useImageStudio() {
     const abort = new AbortController()
     controllerRef.current = abort
     try {
-      const res = await fetch(`${apiBase}/image`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(params),
-        credentials: 'include',
-        signal: abort.signal
-      })
-      if (!res.ok) throw new Error(`HTTP ${res.status}`)
-      const data = await res.json()
+      let data
+      for (let attempt = 0; attempt <= MAX_RETRIES; attempt += 1) {
+        try {
+          data = await request('/image', params, abort.signal)
+          if (data && !data.error) break
+        } catch (err) {
+          if (err.name === 'AbortError') throw err
+          if (attempt === MAX_RETRIES) throw err
+        }
+      }
       stopProgress(100)
       return data
     } catch (err) {
@@ -104,7 +123,7 @@ export function useImageStudio() {
       setGenerating(false)
       controllerRef.current = null
     }
-  }, [startProgress, stopProgress])
+  }, [startProgress, stopProgress, request])
 
   const edit = useCallback(async (params) => {
     setError(null)
@@ -113,15 +132,16 @@ export function useImageStudio() {
     const abort = new AbortController()
     controllerRef.current = abort
     try {
-      const res = await fetch(`${apiBase}/image/edit`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(params),
-        credentials: 'include',
-        signal: abort.signal
-      })
-      if (!res.ok) throw new Error(`HTTP ${res.status}`)
-      const data = await res.json()
+      let data
+      for (let attempt = 0; attempt <= MAX_RETRIES; attempt += 1) {
+        try {
+          data = await request('/image/edit', params, abort.signal)
+          if (data && !data.error) break
+        } catch (err) {
+          if (err.name === 'AbortError') throw err
+          if (attempt === MAX_RETRIES) throw err
+        }
+      }
       stopProgress(100)
       return data
     } catch (err) {
@@ -136,7 +156,7 @@ export function useImageStudio() {
       setGenerating(false)
       controllerRef.current = null
     }
-  }, [startProgress, stopProgress])
+  }, [startProgress, stopProgress, request])
 
   const cancel = useCallback(() => {
     controllerRef.current?.abort()
@@ -155,16 +175,56 @@ export function useImageStudio() {
     return ''
   }, [])
 
+  /**
+   * Generate multiple variants as a queue, tracking per-image status. Returns a
+   * normalized array of { params, result, status } once the queue drains.
+   * @param {Array<object>} items each item is a full generate() params object
+   */
+  const runQueue = useCallback(async (items) => {
+    if (!Array.isArray(items) || !items.length) return []
+    setGenerating(true)
+    setQueue(items.map((it, i) => ({ id: i, params: it, status: 'pending', result: null })))
+    setBatchProgress({ done: 0, total: items.length })
+    const abort = new AbortController()
+    controllerRef.current = abort
+    const results = []
+    for (let i = 0; i < items.length; i += 1) {
+      if (abort.signal.aborted) break
+      setQueue((q) => q.map((j) => (j.id === i ? { ...j, status: 'running' } : j)))
+      let result = null
+      for (let attempt = 0; attempt <= MAX_RETRIES; attempt += 1) {
+        try {
+          result = await request('/image', items[i], abort.signal)
+          if (result && !result.error) break
+        } catch (err) {
+          if (err.name === 'AbortError') { result = { cancelled: true }; break }
+          result = { error: err.message }
+        }
+      }
+      results.push({ params: items[i], result, status: result?.error ? 'failed' : 'done' })
+      setQueue((q) => q.map((j) => (j.id === i ? { ...j, status: result?.error ? 'failed' : 'done', result } : j)))
+      setBatchProgress({ done: i + 1, total: items.length })
+    }
+    setGenerating(false)
+    controllerRef.current = null
+    setQueue([])
+    window.setTimeout(() => setBatchProgress(null), 800)
+    return results
+  }, [request])
+
   return {
     providers,
     providersLoading,
     generating,
     progress,
     error,
+    queue,
+    batchProgress,
     generate,
     edit,
     cancel,
     randomPrompt,
+    runQueue,
     reloadProviders: loadProviders
   }
 }

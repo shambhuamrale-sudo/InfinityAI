@@ -15,7 +15,7 @@ const run = async () => {
   await page.goto(BASE + '/signup', { waitUntil: 'domcontentloaded', timeout: 20000 }); await sleep(700)
   await page.type('input[placeholder="Full name"]', 'Local User')
   await page.type('input[placeholder="Email address"]', email)
-  await page.type('input[placeholder="Password"]', 'password123')
+  await page.type('input[placeholder="Password"]', 'Password123!')
   await Promise.all([
     page.waitForFunction(() => location.pathname === '/dashboard', { timeout: 15000 }),
     page.click('button[type="submit"]')

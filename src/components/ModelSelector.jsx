@@ -52,7 +52,7 @@ export default function ModelSelector({ className = '' }) {
     let cancelled = false
     const load = async () => {
       try {
-        const res = await fetch(`${apiBase}/providers/models`)
+        const res = await fetch(`${apiBase}/providers/models`, { credentials: 'include' })
         if (res.ok) {
           const data = await res.json()
           if (!cancelled) setProviders(Array.isArray(data.providers) ? data.providers : [])

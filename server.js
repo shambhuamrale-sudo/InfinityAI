@@ -1,5 +1,13 @@
-import path from 'node:path'
+import { createRequire } from 'node:module'
 import { fileURLToPath } from 'node:url'
+import path from 'node:path'
+const require = createRequire(import.meta.url)
+let pdfParse
+try { pdfParse = (await import('pdf-parse')).default || require('pdf-parse') } catch { pdfParse = null }
+let mammoth
+try { mammoth = (await import('mammoth')).default } catch { mammoth = null }
+let Tesseract
+try { Tesseract = (await import('tesseract.js')).default } catch { Tesseract = null }
 import express from 'express'
 import cors from 'cors'
 import cookieParser from 'cookie-parser'
@@ -46,6 +54,7 @@ app.use(cookieParser())
 app.use(express.json({ limit: '1mb' }))
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 20 * 1024 * 1024 } })
+const pdfUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 50 * 1024 * 1024 } })
 
 const SALT_ROUNDS = Number(process.env.AUTH_SALT_ROUNDS || 12)
 let JWT_SECRET = process.env.JWT_SECRET
@@ -60,13 +69,59 @@ if (!JWT_SECRET) {
 const JWT_EXPIRY = process.env.JWT_EXPIRY || '7d'
 
 const limiter = rateLimit({ windowMs: 60_000, max: 120, standardHeaders: true, legacyHeaders: false })
+const getLimiter = rateLimit({ windowMs: 60_000, max: 300, standardHeaders: true, legacyHeaders: false })
 app.use('/api/', (req, res, next) => {
-  if (req.method === 'GET') return next()
+  if (req.method === 'GET') return getLimiter(req, res, next)
   return limiter(req, res, next)
 })
 
 const authLimiter = rateLimit({ windowMs: 60_000, max: 100, standardHeaders: true, legacyHeaders: false })
 const forgotPasswordLimiter = rateLimit({ windowMs: 60_000, max: 100, standardHeaders: true, legacyHeaders: false })
+
+// Per-user rate limiting backed by an in-memory store (Redis-like). This gives
+// authenticated users a fair, per-identity budget separate from the global IP
+// limiter above. Keyed by user id when available, falling back to IP.
+const inMemoryStore = new Map()
+function memoryStore() {
+  return {
+    init() {},
+    increment(key) {
+      const now = Date.now()
+      const record = inMemoryStore.get(key) || { count: 0, resetTime: now + 60_000 }
+      if (record.resetTime <= now) {
+        record.count = 0
+        record.resetTime = now + 60_000
+      }
+      record.count += 1
+      inMemoryStore.set(key, record)
+      const isAllowed = record.count <= (userLimiterOpts.max || 60)
+      const resetMs = Math.max(0, record.resetTime - now)
+      return { totalHits: record.count, resetTime: new Date(record.resetTime), msBeforeNext: resetMs, isAllowed }
+    },
+    decrement(key) {
+      const record = inMemoryStore.get(key)
+      if (record && record.count > 0) {
+        record.count -= 1
+        inMemoryStore.set(key, record)
+      }
+    },
+    resetKey(key) {
+      inMemoryStore.delete(key)
+    }
+  }
+}
+
+const userLimiterOpts = { windowMs: 60_000, max: 60, standardHeaders: true, legacyHeaders: false, store: memoryStore() }
+const userLimiter = rateLimit(userLimiterOpts)
+
+setInterval(() => {
+  const now = Date.now()
+  for (const [key, record] of inMemoryStore) {
+    if (record.resetTime <= now) {
+      inMemoryStore.delete(key)
+    }
+  }
+}, 5 * 60_000)
 
 const BREVO_API_KEY = process.env.BREVO_API_KEY
 if ((!BREVO_API_KEY) && IS_PRODUCTION) {
@@ -313,9 +368,27 @@ async function getUserFromToken(req) {
   }
 }
 
-const STRONG_PASSWORD_REGEX = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[!@#$%^&*()_+=\-\[\]{};':"\\|,.<>/?])(?!.*\s).{8,}$/
+const STRONG_PASSWORD_REGEX = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[!@#$%^&*()_+=[\]{};':"\\|,.<>/?-])(?!.*\s).{8,}$/
 const signupSchema = z.object({ name: z.string().min(2), email: z.string().email(), password: z.string().regex(STRONG_PASSWORD_REGEX, 'Password must be at least 8 characters with uppercase, lowercase, number, and special character') })
 const loginSchema = z.object({ email: z.string().email(), password: z.string().min(1) })
+const adminConfigSchema = z.object({
+  trialDays: z.coerce.number().int().min(1).max(365).optional(),
+  storageLimit: z.coerce.number().int().min(1).optional(),
+  planLimits: z.object({
+    'free-trial': z.object({ maxChatsPerDay: z.coerce.number().int().min(1).optional(), maxImagesPerDay: z.coerce.number().int().min(1).optional(), maxChatsPerMonth: z.coerce.number().int().min(1).optional(), maxImagesPerMonth: z.coerce.number().int().min(1).optional() }).optional(),
+    starter: z.object({ maxChatsPerDay: z.coerce.number().int().min(1).optional(), maxImagesPerDay: z.coerce.number().int().min(1).optional(), maxChatsPerMonth: z.coerce.number().int().min(1).optional(), maxImagesPerMonth: z.coerce.number().int().min(1).optional() }).optional(),
+    pro: z.object({ maxChatsPerDay: z.coerce.number().int().min(1).optional(), maxImagesPerDay: z.coerce.number().int().min(1).optional(), maxChatsPerMonth: z.coerce.number().int().min(1).optional(), maxImagesPerMonth: z.coerce.number().int().min(1).optional() }).optional(),
+    business: z.object({ maxChatsPerDay: z.coerce.number().int().min(1).optional(), maxImagesPerDay: z.coerce.number().int().min(1).optional(), maxChatsPerMonth: z.coerce.number().int().min(1).optional(), maxImagesPerMonth: z.coerce.number().int().min(1).optional() }).optional()
+  }).optional(),
+  providerConfig: z.object({
+    chatProvider: z.string().optional(),
+    imageProvider: z.string().optional(),
+    writerProvider: z.string().optional(),
+    codeProvider: z.string().optional(),
+    pdfProvider: z.string().optional(),
+    translateProvider: z.string().optional()
+  }).optional()
+}).passthrough()
 
 function normalizeState(incoming = {}) {
   const now = new Date()
@@ -377,6 +450,22 @@ async function saveState(state) {
   return snapshot
 }
 
+async function enforcePlanLimit(state, tool, res) {
+  const plan = state?.subscription?.plan || 'free-trial'
+  const limits = state?.adminConfig?.planLimits?.[plan] || state?.adminConfig?.planLimits?.['free-trial'] || defaultAdminConfig.planLimits['free-trial']
+  const isTrialExpired = plan === 'free-trial' && Date.now() > (state?.subscription?.expiresAt || 0)
+  if (isTrialExpired) {
+    return res.status(403).json({ error: 'Trial expired. Please upgrade your plan.', reason: 'trial-expired' })
+  }
+  if (tool === 'chat' && state?.usage?.dayChats >= (limits?.maxChatsPerDay || 20)) {
+    return res.status(429).json({ error: 'Daily chat limit reached. Please upgrade or try again tomorrow.', reason: 'chat-limit' })
+  }
+  if (tool === 'image' && state?.usage?.dayImages >= (limits?.maxImagesPerDay || 5)) {
+    return res.status(429).json({ error: 'Daily image limit reached. Please upgrade or try again tomorrow.', reason: 'image-limit' })
+  }
+  return null
+}
+
 function buildFallbackText(kind, prompt) {
   const normalized = (prompt || '').trim() || 'your prompt'
   if (kind === 'chat') {
@@ -395,23 +484,6 @@ function buildFallbackText(kind, prompt) {
     return `Translated draft for ${normalized}`
   }
   return normalized
-}
-
-async function callOllama(prompt, model) {
-  const base = process.env.OLLAMA_URL || 'http://127.0.0.1:11434'
-  try {
-    const response = await fetch(`${base}/api/generate`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ model: model || process.env.OLLAMA_MODEL || 'llama3.2', prompt: `You are a helpful AI assistant. ${prompt}`, stream: false })
-    })
-    if (!response.ok) throw new Error(`Ollama responded with ${response.status}`)
-    const data = await response.json()
-    if (data?.response) return { text: data.response.trim(), provider: 'ollama', usedFallback: false }
-  } catch (error) {
-    console.warn('Ollama unavailable, using fallback response:', error.message)
-  }
-  return { text: buildFallbackText('chat', prompt), provider: 'fallback', usedFallback: true }
 }
 
 app.get('/api/health', (_req, res) => {
@@ -484,7 +556,7 @@ app.post('/api/auth/forgot-password', forgotPasswordLimiter, async (req, res) =>
   res.json({ ok: true, message: 'If an account exists, a reset OTP has been sent.' })
 })
 
-app.post('/api/auth/verify-reset-otp', async (req, res) => {
+app.post('/api/auth/verify-reset-otp', forgotPasswordLimiter, async (req, res) => {
   const { email, otp } = req.body || {}
   if (!email || !otp) return res.status(400).json({ error: 'Email and OTP are required' })
   const db = await connectMongo()
@@ -493,11 +565,16 @@ app.post('/api/auth/verify-reset-otp', async (req, res) => {
   if (!user) return res.status(400).json({ error: 'Invalid request' })
   if (!user.resetOtp || !user.resetOtpExpiry) return res.status(400).json({ error: 'No OTP requested' })
   if (new Date(user.resetOtpExpiry) < new Date()) return res.status(400).json({ error: 'OTP has expired' })
-  if (user.resetOtp !== String(otp)) return res.status(400).json({ error: 'Invalid OTP' })
+  const attempts = Number(user.resetOtpAttempts || 0)
+  if (attempts >= 5) return res.status(429).json({ error: 'Too many attempts. Request a new OTP.' })
+  if (user.resetOtp !== String(otp)) {
+    await usersCollection.updateOne({ _id: user._id }, { $inc: { resetOtpAttempts: 1 } })
+    return res.status(400).json({ error: 'Invalid OTP' })
+  }
   res.json({ ok: true, message: 'OTP verified successfully' })
 })
 
-app.post('/api/auth/reset-password', async (req, res) => {
+app.post('/api/auth/reset-password', forgotPasswordLimiter, async (req, res) => {
   const { email, otp, password } = req.body || {}
   if (!email || !otp || !password) return res.status(400).json({ error: 'Email, OTP and password are required' })
   if (password.length < 6) return res.status(400).json({ error: 'Password must be at least 6 characters' })
@@ -507,7 +584,12 @@ app.post('/api/auth/reset-password', async (req, res) => {
   if (!user) return res.status(400).json({ error: 'Invalid request' })
   if (!user.resetOtp || !user.resetOtpExpiry) return res.status(400).json({ error: 'No OTP requested' })
   if (new Date(user.resetOtpExpiry) < new Date()) return res.status(400).json({ error: 'OTP has expired' })
-  if (user.resetOtp !== String(otp)) return res.status(400).json({ error: 'Invalid OTP' })
+  const attempts = Number(user.resetOtpAttempts || 0)
+  if (attempts >= 5) return res.status(429).json({ error: 'Too many attempts. Request a new OTP.' })
+  if (user.resetOtp !== String(otp)) {
+    await usersCollection.updateOne({ _id: user._id }, { $inc: { resetOtpAttempts: 1 } })
+    return res.status(400).json({ error: 'Invalid OTP' })
+  }
   const passwordHash = await bcrypt.hash(password, SALT_ROUNDS)
   await usersCollection.updateOne(
     { _id: user._id },
@@ -650,7 +732,19 @@ app.get('/api/state', async (_req, res) => {
 })
 
 app.post('/api/state', async (req, res) => {
-  const state = await saveState(req.body || {})
+  const user = req.user
+  if (!user) {
+    return res.status(401).json({ error: 'Not authenticated' })
+  }
+  const incoming = req.body || {}
+  const allowedKeys = ['preferences', 'ui', 'favorites', 'notifications', 'activity', 'toasts', 'chats', 'images', 'conversations']
+  const sanitized = {}
+  for (const key of allowedKeys) {
+    if (incoming[key] !== undefined) {
+      sanitized[key] = incoming[key]
+    }
+  }
+  const state = await saveState({ ...sanitized })
   res.json(state)
 })
 
@@ -659,15 +753,21 @@ app.post('/api/admin/config', async (req, res) => {
   if (!user || user.role !== 'admin') {
     return res.status(403).json({ error: 'Admin access required' })
   }
+  const parsed = adminConfigSchema.safeParse(req.body)
+  if (!parsed.success) {
+    return res.status(400).json({ error: parsed.error.flatten().fieldErrors })
+  }
   const state = await loadState()
-  const nextState = await saveState({ ...state, adminConfig: { ...state.adminConfig, ...req.body } })
+  const nextState = await saveState({ ...state, adminConfig: { ...state.adminConfig, ...parsed.data } })
   res.json(nextState.adminConfig)
 })
 
-app.post('/api/chat', async (req, res) => {
+app.post('/api/chat', userLimiter, async (req, res) => {
   const prompt = req.body?.prompt || ''
   const messages = Array.isArray(req.body?.messages) ? req.body.messages : undefined
   const state = await loadState()
+  const limitResponse = await enforcePlanLimit(state, 'chat', res)
+  if (limitResponse) return
   const provider = req.body?.provider || state.adminConfig.providerConfig?.chatProvider || 'ollama'
   const model = req.body?.model || state.adminConfig.providerConfig?.chatModel || process.env.OLLAMA_MODEL || 'llama3.2'
   const stream = Boolean(req.body?.stream)
@@ -690,9 +790,11 @@ app.post('/api/chat', async (req, res) => {
       res.write(`data: ${JSON.stringify({ error: error.message })}\n\n`)
     }
     res.write('data: [DONE]\n\n')
+    await saveState({ ...state, usage: { ...state.usage, dayChats: state.usage.dayChats + 1, monthChats: state.usage.monthChats + 1 } })
     return res.end()
   }
   const result = await providerManager.chat({ provider, prompt, model, messages })
+  await saveState({ ...state, usage: { ...state.usage, dayChats: state.usage.dayChats + 1, monthChats: state.usage.monthChats + 1 } })
   res.json(result)
 })
 
@@ -766,13 +868,16 @@ function sanitizeImageParams(body = {}) {
 
 // Text-to-image generation. Backward compatible: still returns `text`, and now
 // also returns a normalized `images` array plus generation metadata.
-app.post('/api/image', async (req, res) => {
+app.post('/api/image', userLimiter, async (req, res) => {
   const state = await loadState()
+  const limitResponse = await enforcePlanLimit(state, 'image', res)
+  if (limitResponse) return
   const provider = req.body?.provider || state.adminConfig.providerConfig?.imageProvider || imageProviderManager.defaultProviderId
   const params = sanitizeImageParams(req.body)
   const result = await imageProviderManager.generate({ provider, ...params })
   // Keep a human-readable `text` field for legacy consumers.
   if (!result.text) result.text = `Generated image for: ${params.prompt || 'your prompt'}`
+  await saveState({ ...state, usage: { ...state.usage, dayImages: state.usage.dayImages + 1, monthImages: state.usage.monthImages + 1 } })
   res.json(result)
 })
 
@@ -780,6 +885,8 @@ app.post('/api/image', async (req, res) => {
 // restoration, inpainting, outpainting, crop/resize.
 app.post('/api/image/edit', async (req, res) => {
   const state = await loadState()
+  const limitResponse = await enforcePlanLimit(state, 'image', res)
+  if (limitResponse) return
   const provider = req.body?.provider || state.adminConfig.providerConfig?.imageProvider || imageProviderManager.defaultProviderId
   const validOps = ['image-to-image', 'inpaint', 'outpaint', 'upscale', 'background-removal', 'face-restoration', 'crop-resize']
   const operation = validOps.includes(req.body?.operation) ? req.body.operation : 'image-to-image'
@@ -787,6 +894,7 @@ app.post('/api/image/edit', async (req, res) => {
   const image = typeof req.body?.image === 'string' ? req.body.image : undefined
   const denoisingStrength = Number.isFinite(Number(req.body?.denoisingStrength)) ? Number(req.body.denoisingStrength) : 0.6
   const result = await imageProviderManager.edit({ provider, operation, image, denoisingStrength, ...params })
+  await saveState({ ...state, usage: { ...state.usage, dayImages: state.usage.dayImages + 1, monthImages: state.usage.monthImages + 1 } })
   res.json(result)
 })
 
@@ -838,28 +946,375 @@ app.get('/api/image/random-prompt', (req, res) => {
 
 app.post('/api/writer', async (req, res) => {
   const prompt = req.body?.prompt || ''
-  const result = await callOllama(`Write a polished launch-ready copy based on this prompt: ${prompt}`, process.env.OLLAMA_MODEL || 'llama3.2')
-  res.json({ response: result.text, provider: result.provider, usedFallback: result.usedFallback })
+  const tone = req.body?.tone || 'professional'
+  const length = req.body?.length || 'medium'
+  const templates = req.body?.templates || ''
+  const systemPrompt = `You are an expert copywriter. Generate polished, launch-ready copy. Tone: ${tone}. Length: ${length}.${templates ? ` Use these templates as guidance: ${templates}` : ''} Always produce clear, benefit-led, confident copy with a strong call to action.`
+  try {
+    const result = await providerManager.chat({ prompt, messages: [{ role: 'system', content: systemPrompt }, { role: 'user', content: prompt }] })
+    res.json({ response: result.text, provider: result.provider, usedFallback: result.usedFallback, tokens: result.tokens, time: result.time })
+  } catch (error) {
+    console.error('Writer error:', error)
+    res.status(500).json({ error: 'Writer service unavailable', response: buildFallbackText('writer', prompt), provider: 'fallback', usedFallback: true })
+  }
 })
 
 app.post('/api/code', async (req, res) => {
   const prompt = req.body?.prompt || ''
-  const result = await callOllama(`Generate a useful code snippet for this request: ${prompt}`, process.env.OLLAMA_MODEL || 'llama3.2')
-  res.json({ response: result.text, provider: result.provider, usedFallback: result.usedFallback })
+  const language = req.body?.language || 'javascript'
+  const framework = req.body?.framework || ''
+  const systemPrompt = `You are an expert software engineer. Generate clean, production-ready ${language}${framework ? ` code using ${framework}` : ''} for this request. Include comments, error handling, and follow best practices. If the request asks for explanation, debugging, or optimization, provide detailed analysis with code examples.`
+  try {
+    const result = await providerManager.chat({ prompt, messages: [{ role: 'system', content: systemPrompt }, { role: 'user', content: prompt }] })
+    res.json({ response: result.text, provider: result.provider, usedFallback: result.usedFallback, tokens: result.tokens, time: result.time })
+  } catch (error) {
+    console.error('Code error:', error)
+    res.status(500).json({ error: 'Code service unavailable', response: buildFallbackText('code', prompt), provider: 'fallback', usedFallback: true })
+  }
 })
 
-app.post('/api/pdf', async (req, res) => {
-  const text = req.body?.text || ''
-  const prompt = req.body?.prompt || ''
-  const summary = text ? `Summary for ${prompt || 'the uploaded document'}:\n\n${text.slice(0, 600)}` : buildFallbackText('pdf', prompt)
-  res.json({ response: summary, provider: 'backend', usedFallback: !text })
+app.post('/api/pdf', pdfUpload.single('file'), async (req, res) => {
+  const startTime = Date.now()
+  let extractedText = ''
+  const userPrompt = req.body?.prompt || ''
+  try {
+    if (req.file) {
+      const buffer = req.file.buffer
+      const mime = req.file.mimetype
+      if (mime === 'application/pdf' && pdfParse) {
+        try {
+          const data = await pdfParse(buffer)
+          extractedText = (data.text || '').trim()
+        } catch (pdfErr) {
+          console.warn('pdf-parse failed:', pdfErr.message)
+        }
+      } else if (mime === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' && mammoth) {
+        try {
+          const result = await mammoth.extractRawText({ buffer })
+          extractedText = (result.value || '').trim()
+        } catch (docErr) {
+          console.warn('mammoth failed:', docErr.message)
+        }
+      } else if (mime === 'text/plain') {
+        extractedText = buffer.toString('utf-8').trim()
+      } else {
+        extractedText = `[Unsupported file type: ${mime}]`
+      }
+    }
+    const text = req.body?.text || extractedText
+    if (!text && !userPrompt) {
+      return res.json({ response: buildFallbackText('pdf', 'document'), provider: 'backend', usedFallback: true })
+    }
+    const systemPrompt = `You are a document analysis expert. Analyze the provided document text and respond to the user's request. If no specific request is given, provide a comprehensive summary including: main topics, key findings, important data points, and suggested actions. Be concise but thorough.`
+    const result = await providerManager.chat({ prompt: userPrompt || 'Summarize this document', messages: [{ role: 'system', content: systemPrompt }, { role: 'user', content: `Document text:\n\n${text}\n\n${userPrompt ? `Request: ${userPrompt}` : 'Please summarize this document.'}` }] })
+    res.json({ response: result.text, provider: result.provider, usedFallback: result.usedFallback, text: text.slice(0, 5000), tokens: result.tokens, time: Date.now() - startTime })
+  } catch (error) {
+    console.error('PDF error:', error)
+    res.status(500).json({ error: 'PDF service unavailable', response: buildFallbackText('pdf', userPrompt), provider: 'fallback', usedFallback: true })
+  }
 })
 
 app.post('/api/translate', async (req, res) => {
   const text = req.body?.text || ''
   const target = req.body?.target || 'Spanish'
-  const response = text ? `${target} translation: ${text}` : buildFallbackText('translate', '')
-  res.json({ response, provider: 'backend', usedFallback: !text })
+  const source = req.body?.source || 'auto'
+  const context = req.body?.context || 'general'
+  const systemPrompt = `You are a professional translator. Translate the following text to ${target}. Context: ${context}. Preserve the original meaning, tone, and formatting. Only return the translated text, without explanations or notes. If the text contains code or special formatting, preserve it exactly.`
+  try {
+    const result = await providerManager.chat({ prompt: text, messages: [{ role: 'system', content: systemPrompt }, { role: 'user', content: text }] })
+    res.json({ response: result.text, provider: result.provider, usedFallback: result.usedFallback, target, source, tokens: result.tokens, time: result.time })
+  } catch (error) {
+    console.error('Translate error:', error)
+    res.status(500).json({ error: 'Translation service unavailable', response: buildFallbackText('translate', text), provider: 'fallback', usedFallback: true })
+  }
+})
+
+app.post('/api/vision', async (req, res) => {
+  const prompt = req.body?.prompt || 'Describe this image in detail'
+  const image = req.body?.image || ''
+  const systemPrompt = `You are an expert image analyst. Analyze the provided image and answer the user's question. Describe visual elements, text, objects, people, scenes, colors, and context in detail. If the user asks a specific question, focus on answering it accurately.`
+  try {
+    const result = await providerManager.chat({ prompt: image ? `${prompt}\n\nImage data (base64 or URL): ${image.slice(0, 10000)}` : prompt, messages: [{ role: 'system', content: systemPrompt }, { role: 'user', content: prompt }] })
+    res.json({ response: result.text, provider: result.provider, usedFallback: result.usedFallback, tokens: result.tokens, time: result.time })
+  } catch (error) {
+    console.error('Vision error:', error)
+    res.status(500).json({ error: 'Vision service unavailable', response: 'Image analysis is currently unavailable. Please try again later.', provider: 'fallback', usedFallback: true })
+  }
+})
+
+app.post('/api/ocr', async (req, res) => {
+  const image = req.body?.image || ''
+  const language = req.body?.language || 'eng'
+  try {
+    if (Tesseract && image) {
+      const { data: { text } } = await Tesseract.recognize(image, language)
+      return res.json({ response: text.trim(), provider: 'tesseract', usedFallback: false, language })
+    }
+    const systemPrompt = `You are an OCR text extraction expert. Extract all visible text from the provided image data. Return only the extracted text, preserving line breaks and formatting as much as possible. If no text is visible, return "No text detected in image."`
+    const result = await providerManager.chat({ prompt: image ? `Extract text from this image: ${image.slice(0, 10000)}` : 'No image provided', messages: [{ role: 'system', content: systemPrompt }, { role: 'user', content: 'Extract all text from this image.' }] })
+    res.json({ response: result.text, provider: result.provider, usedFallback: result.usedFallback, language, tokens: result.tokens, time: result.time })
+  } catch (error) {
+    console.error('OCR error:', error)
+    res.status(500).json({ error: 'OCR service unavailable', response: 'Text extraction is currently unavailable. Please try again later.', provider: 'fallback', usedFallback: true })
+  }
+})
+
+app.post('/api/grammar', async (req, res) => {
+  const text = req.body?.text || ''
+  const systemPrompt = `You are a professional grammar and style editor. Analyze the provided text for: grammar errors, spelling mistakes, punctuation issues, awkward phrasing, and style improvements. Return your response in this exact format:
+
+## Grammar Check Results
+
+### Issues Found
+- **Error type**: [brief explanation]
+- **Suggestion**: [corrected version]
+
+### Corrected Text
+[the full corrected text]
+
+### Improvements
+- [list of style and clarity improvements]
+
+If no errors are found, say "No significant grammar or spelling errors detected." and provide 2-3 optional style improvements.`
+  try {
+    const result = await providerManager.chat({ prompt: text, messages: [{ role: 'system', content: systemPrompt }, { role: 'user', content: `Check the grammar and style of this text:\n\n${text}` }] })
+    res.json({ response: result.text, provider: result.provider, usedFallback: result.usedFallback, tokens: result.tokens, time: result.time })
+  } catch (error) {
+    console.error('Grammar error:', error)
+    res.status(500).json({ error: 'Grammar service unavailable', response: 'Grammar checking is currently unavailable. Please try again later.', provider: 'fallback', usedFallback: true })
+  }
+})
+
+app.post('/api/email', async (req, res) => {
+  const context = req.body?.context || ''
+  const recipient = req.body?.recipient || ''
+  const tone = req.body?.tone || 'professional'
+  const purpose = req.body?.purpose || 'general'
+  const keyPoints = req.body?.keyPoints || ''
+  const systemPrompt = `You are an expert email writer. Write a professional, polished email based on the following context. Tone: ${tone}. Purpose: ${purpose}.${recipient ? ` Recipient: ${recipient}.` : ''}${keyPoints ? ` Key points to include: ${keyPoints}` : ''}
+
+Structure the email with:
+- Clear subject line
+- Appropriate greeting
+- Well-structured body with clear paragraphs
+- Professional closing
+- Signature placeholder
+
+Keep it concise and actionable. Use proper email formatting.`
+  try {
+    const result = await providerManager.chat({ prompt: context, messages: [{ role: 'system', content: systemPrompt }, { role: 'user', content: `Write an email with the following context:\n${context}` }] })
+    res.json({ response: result.text, provider: result.provider, usedFallback: result.usedFallback, tokens: result.tokens, time: result.time })
+  } catch (error) {
+    console.error('Email error:', error)
+    res.status(500).json({ error: 'Email service unavailable', response: 'Email generation is currently unavailable. Please try again later.', provider: 'fallback', usedFallback: true })
+  }
+})
+
+app.post('/api/resume', async (req, res) => {
+  const section = req.body?.section || 'full'
+  const experience = req.body?.experience || ''
+  const skills = req.body?.skills || ''
+  const education = req.body?.education || ''
+  const targetRole = req.body?.targetRole || ''
+  const systemPrompt = `You are an expert resume writer and career coach. Generate a polished, ATS-friendly resume section based on the provided information.${targetRole ? ` Target role: ${targetRole}.` : ''}
+
+For the "${section}" section:
+- Use strong action verbs
+- Quantify achievements where possible
+- Keep bullet points concise and impactful
+- Use industry-standard keywords
+- Format as clean markdown
+
+If generating a full resume, structure it with: Contact, Summary, Experience, Education, Skills sections.`
+  try {
+    const prompt = `Generate resume ${section} section.\n\nExperience:\n${experience}\n\nSkills:\n${skills}\n\nEducation:\n${education}`
+    const result = await providerManager.chat({ prompt, messages: [{ role: 'system', content: systemPrompt }, { role: 'user', content: prompt }] })
+    res.json({ response: result.text, provider: result.provider, usedFallback: result.usedFallback, section, tokens: result.tokens, time: result.time })
+  } catch (error) {
+    console.error('Resume error:', error)
+    res.status(500).json({ error: 'Resume service unavailable', response: 'Resume generation is currently unavailable. Please try again later.', provider: 'fallback', usedFallback: true })
+  }
+})
+
+app.post('/api/sql', async (req, res) => {
+  const schema = req.body?.schema || ''
+  const query = req.body?.query || ''
+  const dbType = req.body?.dbType || 'generic SQL'
+  const systemPrompt = `You are an expert SQL developer. Generate optimized, production-ready ${dbType} queries based on the provided schema and requirements. Include:
+- Proper JOINs and WHERE clauses
+- Index recommendations where helpful
+- Comments explaining complex logic
+- Parameterized queries where applicable
+- Both the query and a brief explanation
+
+Never include sensitive data patterns. If the request is ambiguous, ask clarifying questions in comments.`
+  try {
+    const result = await providerManager.chat({ prompt: query, messages: [{ role: 'system', content: systemPrompt }, { role: 'user', content: `Schema:\n${schema}\n\nRequest: ${query || 'Generate sample queries for this schema'}` }] })
+    res.json({ response: result.text, provider: result.provider, usedFallback: result.usedFallback, dbType, tokens: result.tokens, time: result.time })
+  } catch (error) {
+    console.error('SQL error:', error)
+    res.status(500).json({ error: 'SQL service unavailable', response: 'SQL generation is currently unavailable. Please try again later.', provider: 'fallback', usedFallback: true })
+  }
+})
+
+app.post('/api/regex', async (req, res) => {
+  const description = req.body?.description || ''
+  const examples = req.body?.examples || ''
+  const language = req.body?.language || 'javascript'
+  const systemPrompt = `You are a regex expert. Generate accurate regular expressions based on natural language descriptions. Provide:
+1. The regex pattern
+2. A brief explanation of how it works
+3. Example matches
+4. Common pitfalls to avoid
+5. A test snippet in ${language}
+
+Use standard regex syntax compatible with ${language}. If multiple valid patterns exist, provide the most efficient one.`
+  try {
+    const result = await providerManager.chat({ prompt: description, messages: [{ role: 'system', content: systemPrompt }, { role: 'user', content: `Generate a regex for: ${description}\n\nExamples: ${examples}` }] })
+    res.json({ response: result.text, provider: result.provider, usedFallback: result.usedFallback, language, tokens: result.tokens, time: result.time })
+  } catch (error) {
+    console.error('Regex error:', error)
+    res.status(500).json({ error: 'Regex service unavailable', response: 'Regex generation is currently unavailable. Please try again later.', provider: 'fallback', usedFallback: true })
+  }
+})
+
+app.post('/api/json', async (req, res) => {
+  const input = req.body?.input || ''
+  const action = req.body?.action || 'format'
+  const result = { response: '', provider: 'backend', usedFallback: false }
+  try {
+    if (action === 'validate' || action === 'format' || action === 'prettify') {
+      try {
+        const parsed = JSON.parse(input)
+        result.response = action === 'minify' ? JSON.stringify(parsed) : JSON.stringify(parsed, null, 2)
+        result.usedFallback = false
+      } catch (parseError) {
+        result.response = `JSON Parse Error: ${parseError.message}\n\nPlease check your JSON syntax. Common issues:\n- Trailing commas\n- Missing quotes around keys\n- Single quotes instead of double quotes\n- Unescaped characters in strings`
+        result.usedFallback = true
+      }
+    } else if (action === 'minify') {
+      try {
+        const parsed = JSON.parse(input)
+        result.response = JSON.stringify(parsed)
+        result.usedFallback = false
+      } catch (parseError) {
+        result.response = `JSON Parse Error: ${parseError.message}`
+        result.usedFallback = true
+      }
+    } else if (action === 'analyze') {
+      try {
+        const parsed = JSON.parse(input)
+        const keys = Object.keys(parsed)
+        const size = new Blob([input]).size
+        const analysis = {
+          valid: true,
+          size: `${(size / 1024).toFixed(2)} KB`,
+          keys: keys.length,
+          type: Array.isArray(parsed) ? 'array' : typeof parsed === 'object' ? 'object' : typeof parsed,
+          depth: JSON.stringify(parsed).split('\n').length,
+          sampleKeys: keys.slice(0, 10)
+        }
+        result.response = JSON.stringify(analysis, null, 2)
+        result.usedFallback = false
+      } catch (parseError) {
+        result.response = `JSON Parse Error: ${parseError.message}`
+        result.usedFallback = true
+      }
+    } else {
+      result.response = JSON.stringify(JSON.parse(input), null, 2)
+      result.usedFallback = false
+    }
+    res.json(result)
+  } catch (error) {
+    console.error('JSON error:', error)
+    res.status(500).json({ error: 'JSON service unavailable', response: 'JSON processing is currently unavailable. Please try again later.', provider: 'fallback', usedFallback: true })
+  }
+})
+
+app.post('/api/debug', async (req, res) => {
+  const code = req.body?.code || ''
+  const error = req.body?.error || ''
+  const language = req.body?.language || 'javascript'
+  const systemPrompt = `You are an expert debugger. Analyze the provided code and error message. Provide:
+1. Root cause analysis
+2. Step-by-step debugging approach
+3. Fixed code with explanations
+4. Prevention strategies
+5. Related edge cases to consider
+
+Be specific and practical. Show the exact changes needed.`
+  try {
+    const result = await providerManager.chat({ prompt: code, messages: [{ role: 'system', content: systemPrompt }, { role: 'user', content: `Debug this ${language} code:\n\n\`\`\`${language}\n${code}\n\`\`\`\n\nError message:\n${error || 'No error message provided'}` }] })
+    res.json({ response: result.text, provider: result.provider, usedFallback: result.usedFallback, language, tokens: result.tokens, time: result.time })
+  } catch (error) {
+    console.error('Debug error:', error)
+    res.status(500).json({ error: 'Debug service unavailable', response: 'Debugging is currently unavailable. Please try again later.', provider: 'fallback', usedFallback: true })
+  }
+})
+
+app.post('/api/explain', async (req, res) => {
+  const code = req.body?.code || ''
+  const language = req.body?.language || 'javascript'
+  const detailLevel = req.body?.detailLevel || 'medium'
+  const systemPrompt = `You are an expert code instructor. Explain the provided ${language} code line-by-line or section-by-section. Detail level: ${detailLevel}. Include:
+1. Overall purpose and flow
+2. Line-by-line or section explanations
+3. Key concepts and patterns used
+4. Input/output behavior
+5. Time and space complexity where relevant
+
+Use clear, educational language. Format with code blocks and bullet points.`
+  try {
+    const result = await providerManager.chat({ prompt: code, messages: [{ role: 'system', content: systemPrompt }, { role: 'user', content: `Explain this ${language} code in detail:\n\n\`\`\`${language}\n${code}\n\`\`\`` }] })
+    res.json({ response: result.text, provider: result.provider, usedFallback: result.usedFallback, language, detailLevel, tokens: result.tokens, time: result.time })
+  } catch (error) {
+    console.error('Explain error:', error)
+    res.status(500).json({ error: 'Explain service unavailable', response: 'Code explanation is currently unavailable. Please try again later.', provider: 'fallback', usedFallback: true })
+  }
+})
+
+app.post('/api/optimize', async (req, res) => {
+  const code = req.body?.code || ''
+  const language = req.body?.language || 'javascript'
+  const goals = req.body?.goals || 'performance, readability, maintainability'
+  const systemPrompt = `You are an expert code optimizer. Analyze and optimize the provided ${language} code. Focus on: ${goals}. Provide:
+1. Performance improvements (time/space complexity)
+2. Readability enhancements
+3. Modern syntax / idiomatic patterns
+4. Best practice violations and fixes
+5. The optimized code with comments explaining changes
+
+Show before/after comparisons where helpful.`
+  try {
+    const result = await providerManager.chat({ prompt: code, messages: [{ role: 'system', content: systemPrompt }, { role: 'user', content: `Optimize this ${language} code:\n\n\`\`\`${language}\n${code}\n\`\`\`\n\nGoals: ${goals}` }] })
+    res.json({ response: result.text, provider: result.provider, usedFallback: result.usedFallback, language, goals, tokens: result.tokens, time: result.time })
+  } catch (error) {
+    console.error('Optimize error:', error)
+    res.status(500).json({ error: 'Optimize service unavailable', response: 'Code optimization is currently unavailable. Please try again later.', provider: 'fallback', usedFallback: true })
+  }
+})
+
+app.post('/api/document-analyze', async (req, res) => {
+  const text = req.body?.text || ''
+  const prompt = req.body?.prompt || ''
+  const analysisType = req.body?.analysisType || 'comprehensive'
+  const systemPrompt = `You are a document analysis expert. Perform a ${analysisType} analysis of the provided document text. Include:
+1. Executive summary
+2. Key themes and topics
+3. Important entities (people, places, organizations, dates)
+4. Sentiment and tone analysis
+5. Key data points and statistics
+6. Action items or recommendations
+7. Risk factors or concerns (if any)
+
+Format with clear headings and bullet points. Be objective and thorough.`
+  try {
+    const result = await providerManager.chat({ prompt: prompt || 'Analyze this document', messages: [{ role: 'system', content: systemPrompt }, { role: 'user', content: `Document text:\n\n${text}\n\n${prompt ? `Specific request: ${prompt}` : 'Please provide a comprehensive analysis.'}` }] })
+    res.json({ response: result.text, provider: result.provider, usedFallback: result.usedFallback, analysisType, tokens: result.tokens, time: result.time })
+  } catch (error) {
+    console.error('Document analyze error:', error)
+    res.status(500).json({ error: 'Document analysis unavailable', response: 'Document analysis is currently unavailable. Please try again later.', provider: 'fallback', usedFallback: true })
+  }
 })
 
 app.post('/api/favorites', async (req, res) => {
@@ -887,8 +1342,16 @@ app.use((_req, res) => {
   res.status(404).json({ error: 'Not found' })
 })
 
-app.use((error, _req, res, _next) => {
+app.use((error, req, res, _next) => {
   console.error(error)
+  if (res.headersSent) return
+  const isStream = req.headers.accept?.includes('text/event-stream')
+  if (isStream) {
+    res.setHeader('Content-Type', 'text/event-stream')
+    res.write(`data: ${JSON.stringify({ error: error.message || 'Internal server error' })}\n\n`)
+    res.write('data: [DONE]\n\n')
+    return res.end()
+  }
   res.status(500).json({ error: 'Internal server error' })
 })
 
@@ -910,22 +1373,44 @@ export async function startServer(port = Number(process.env.PORT || 4000)) {
   })
 }
 
+export async function stopMemoryServer() {
+  if (mongoMemoryServer) {
+    try {
+      await mongoMemoryServer.stop()
+      mongoMemoryServer = null
+      MongoMemoryServer = null
+    } catch (error) {
+      console.warn('Failed to stop memory server:', error.message)
+    }
+  }
+}
+
 process.on('SIGTERM', async () => {
   console.log('SIGTERM received, shutting down gracefully')
-  if (mongoClient) {
-    await mongoClient.close()
-    console.log('MongoDB connection closed')
+  try {
+    if (mongoClient) {
+      await mongoClient.close()
+      console.log('MongoDB connection closed')
+    }
+  } catch (error) {
+    console.error('Error during SIGTERM shutdown:', error)
+  } finally {
+    process.exit(0)
   }
-  process.exit(0)
 })
 
 process.on('SIGINT', async () => {
   console.log('SIGINT received, shutting down gracefully')
-  if (mongoClient) {
-    await mongoClient.close()
-    console.log('MongoDB connection closed')
+  try {
+    if (mongoClient) {
+      await mongoClient.close()
+      console.log('MongoDB connection closed')
+    }
+  } catch (error) {
+    console.error('Error during SIGINT shutdown:', error)
+  } finally {
+    process.exit(0)
   }
-  process.exit(0)
 })
 
 if (process.argv[1] && process.argv[1].endsWith('server.js')) {

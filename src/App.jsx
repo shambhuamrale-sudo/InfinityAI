@@ -38,6 +38,17 @@ import UserMenu from './components/UserMenu'
 import ToastViewport from './components/ToastViewport'
 import PageLoader from './components/PageLoader'
 import ProviderStatusIndicator from './components/ProviderStatusIndicator'
+import VisionPage from './pages/VisionPage'
+import OCRPage from './pages/OCRPage'
+import GrammarPage from './pages/GrammarPage'
+import EmailWriterPage from './pages/EmailWriterPage'
+import ResumeBuilderPage from './pages/ResumeBuilderPage'
+import SQLGeneratorPage from './pages/SQLGeneratorPage'
+import RegexGeneratorPage from './pages/RegexGeneratorPage'
+import JSONFormatterPage from './pages/JSONFormatterPage'
+import CodeDebuggerPage from './pages/CodeDebuggerPage'
+import CodeExplainerPage from './pages/CodeExplainerPage'
+import CodeOptimizerPage from './pages/CodeOptimizerPage'
 import ForgotPasswordPage from './pages/ForgotPasswordPage'
 import { useAppContext } from './context/useAppContext'
 
@@ -45,6 +56,22 @@ function AppShell() {
   const location = useLocation()
   const { setCommandPaletteOpen, setNotificationsOpen, auth } = useAppContext()
   const [loading, setLoading] = useState(false)
+  const [providerStatuses, setProviderStatuses] = useState({ ollama: 'unknown', comfyui: 'unknown' })
+
+  useEffect(() => {
+    const fetchStatuses = async () => {
+      try {
+        const [chatRes] = await Promise.all([
+          fetch('/api/providers/availability', { credentials: 'include' }).catch(() => null)
+        ])
+        if (chatRes?.ok) {
+          const data = await chatRes.json()
+          setProviderStatuses(data.availability || {})
+        }
+      } catch {}
+    }
+    fetchStatuses()
+  }, [])
 
   useEffect(() => {
     setLoading(true)
@@ -87,8 +114,8 @@ function AppShell() {
       {isProtectedRoute && auth.isAuthenticated ? (
         <div className="fixed bottom-4 right-4 z-[80] flex flex-col items-end gap-3">
           <div className="flex items-center gap-2 rounded-full border border-white/10 bg-[#0a0c14]/80 px-3 py-2 text-sm text-slate-300 backdrop-blur-xl">
-            <ProviderStatusIndicator provider="ollama" status="healthy" className="border-0 bg-transparent px-0 py-0" />
-            <ProviderStatusIndicator provider="comfyui" status="healthy" className="border-0 bg-transparent px-0 py-0" />
+            <ProviderStatusIndicator provider="ollama" status={providerStatuses.ollama || 'unknown'} className="border-0 bg-transparent px-0 py-0" />
+            <ProviderStatusIndicator provider="comfyui" status={providerStatuses.comfyui || 'unknown'} className="border-0 bg-transparent px-0 py-0" />
           </div>
           <motion.button whileHover={{ scale: 1.03, y: -2 }} whileTap={{ scale: 0.97 }} onClick={() => setCommandPaletteOpen(true)} className="rounded-full brand-gradient p-4 text-white shadow-[0_16px_60px_-16px_rgba(129,140,248,0.7)]">
             <span className="text-lg font-semibold">＋</span>
@@ -108,6 +135,17 @@ function AppShell() {
         <Route path="/code" element={renderProtected(<CodePage />)} />
         <Route path="/pdf" element={renderProtected(<PDFPage />)} />
         <Route path="/translate" element={renderProtected(<TranslatePage />)} />
+        <Route path="/vision" element={renderProtected(<VisionPage />)} />
+        <Route path="/ocr" element={renderProtected(<OCRPage />)} />
+        <Route path="/grammar" element={renderProtected(<GrammarPage />)} />
+        <Route path="/email" element={renderProtected(<EmailWriterPage />)} />
+        <Route path="/resume" element={renderProtected(<ResumeBuilderPage />)} />
+        <Route path="/sql" element={renderProtected(<SQLGeneratorPage />)} />
+        <Route path="/regex" element={renderProtected(<RegexGeneratorPage />)} />
+        <Route path="/json" element={renderProtected(<JSONFormatterPage />)} />
+        <Route path="/debug" element={renderProtected(<CodeDebuggerPage />)} />
+        <Route path="/explain" element={renderProtected(<CodeExplainerPage />)} />
+        <Route path="/optimize" element={renderProtected(<CodeOptimizerPage />)} />
         <Route path="/profile" element={renderProtected(<ProfilePage />)} />
         <Route path="/settings" element={renderProtected(<SettingsPage />)} />
         <Route path="/chat-history" element={renderProtected(<ChatHistoryPage />)} />

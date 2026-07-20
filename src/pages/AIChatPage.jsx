@@ -201,8 +201,8 @@ export default function AIChatPage() {
     setSearchQuery,
     createConversation,
     selectConversation,
-    updateChatConversation,
-    deleteChatConversation,
+    updateConversation,
+    deleteConversation,
     duplicateConversation,
     sendMessage,
     stopGeneration,
@@ -250,7 +250,7 @@ export default function AIChatPage() {
     if (!prompt.trim() && attachments.length === 0) return
     const allowed = canUseTool('chat')
     if (!allowed.allowed) {
-      setMessages((prev) => [...prev, { role: 'assistant', content: allowed.reason === 'trial-expired' ? 'Your trial has expired.' : 'Your daily chat limit has been reached. Upgrade to continue.', status: 'error' }])
+      setError(allowed.reason === 'trial-expired' ? 'Your trial has expired.' : 'Your daily chat limit has been reached. Upgrade to continue.')
       return
     }
     const text = prompt.trim()
@@ -286,27 +286,27 @@ export default function AIChatPage() {
   const handleRename = async (conversation) => {
     const newTitle = prompt('Enter new title:', conversation.title)
     if (newTitle && newTitle.trim()) {
-      await updateChatConversation(conversation.id, { title: newTitle.trim() })
+      await updateConversation(conversation.id, { title: newTitle.trim() })
     }
   }
 
   const handlePin = async (id) => {
     const conv = allConversations.find((c) => c.id === id)
     if (conv) {
-      await updateChatConversation(id, { pinned: !conv.pinned })
+      await updateConversation(id, { pinned: !conv.pinned })
     }
   }
 
   const handleArchive = async (id) => {
     const conv = allConversations.find((c) => c.id === id)
     if (conv) {
-      await updateChatConversation(id, { archived: !conv.archived })
+      await updateConversation(id, { archived: !conv.archived })
     }
   }
 
   const handleDelete = async (id) => {
     if (window.confirm('Are you sure you want to delete this conversation?')) {
-      await deleteChatConversation(id)
+      await deleteConversation(id)
     }
   }
 

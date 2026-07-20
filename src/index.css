@@ -28,6 +28,50 @@
   --surface-panel: #07101f;
 }
 
+/* ── Light theme palette ──────────────────────────────────────────────── */
+/* Components opt into these via CSS variables; the .dark/.light classes on
+   <html> drive which token set is active. */
+.light {
+  --bg: #f4f6fb;
+  --bg-soft: #ffffff;
+  --surface: rgba(15, 23, 42, 0.03);
+  --surface-strong: rgba(15, 23, 42, 0.05);
+  --border: rgba(15, 23, 42, 0.10);
+  --border-strong: rgba(15, 23, 42, 0.16);
+  --text: #14182b;
+  --text-muted: #5b6276;
+  --text-faint: #8b91a4;
+  --brand: #6366f1;
+  --brand-2: #a855f7;
+  --brand-3: #db2777;
+  --ring: rgba(99, 102, 241, 0.45);
+  --surface-deep: #ffffff;
+  --surface-navy: #eef1f8;
+  --surface-panel: #ffffff;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+  min-height: 100vh;
+  background: var(--bg);
+  color: var(--text);
+  letter-spacing: -0.011em;
+  transition: background-color 0.4s ease, color 0.4s ease;
+}
+
+#root {
+  min-height: 100vh;
+}
+
 * {
   box-sizing: border-box;
 }

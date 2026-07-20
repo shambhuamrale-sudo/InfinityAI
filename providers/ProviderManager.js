@@ -5,6 +5,7 @@ import { AnthropicProvider } from './AnthropicProvider.js'
 import { DeepSeekProvider } from './DeepSeekProvider.js'
 import { MistralProvider } from './MistralProvider.js'
 import { OpenRouterProvider } from './OpenRouterProvider.js'
+import { GroqProvider } from './GroqProvider.js'
 
 /**
  * ProviderManager
@@ -134,22 +135,82 @@ export class ProviderManager {
   }
 
   /**
-   * Perform a chat completion via the selected provider. Always resolves with a
-   * normalized result and never throws for expected provider failures.
+   * Try providers in order, returning the first non-fallback result. If every
+   * provider falls back, the final (fallback) result is returned so the chat
+   * contract is always honored. Providers missing a key are skipped quickly.
+   * @param {string[]} orderedIds
+   * @param {object} params
+   * @param {(result: object) => boolean} isFallback
+   * @returns {Promise<object>}
+   */
+  async tryChain(orderedIds, params, isFallback) {
+    let last = null
+    for (const id of orderedIds) {
+      const provider = this.get(id)
+      if (!provider) continue
+      try {
+        const result = await provider.chat(params)
+        last = result
+        if (!isFallback(result)) return result
+      } catch (error) {
+        console.warn(`Provider "${id}" chat failed:`, error.message)
+        last = { text: '', provider: 'fallback', model: params.model, usedFallback: true, error: error.message }
+      }
+    }
+    if (last) return last
+    const { buildChatFallback } = await import('./utils.js')
+    return { text: buildChatFallback(params.prompt), provider: 'fallback', model: params.model, usedFallback: true }
+  }
+
+  /**
+   * Perform a chat completion via the selected provider, with an automatic
+   * fallback chain: if the primary provider is unconfigured or errors, the
+   * manager tries other *configured* providers, finally Ollama, before
+   * yielding a graceful fallback response.
    */
   async chat({ provider: providerId, prompt, model, messages } = {}) {
-    const provider = this.select(providerId)
-    if (!provider) {
+    const primary = this.select(providerId)
+    const isFallback = (r) => r?.usedFallback === true || r?.provider === 'fallback'
+    const params = { prompt, model, messages }
+
+    if (!primary) {
       return { text: '', provider: 'none', model, usedFallback: true, error: 'no-provider' }
     }
+
+    // Build the ordered chain: primary → other configured cloud providers → ollama.
+    const others = this.list()
+      .filter((p) => p.id !== primary.id)
+      .sort((a, b) => Number(b.isConfigured()) - Number(a.isConfigured()))
+      .map((p) => p.id)
+    const ordered = [primary.id, ...others]
+
     try {
-      return await provider.chat({ prompt, model, messages })
+      const result = await this.tryChain(ordered, params, isFallback)
+      return result
     } catch (error) {
-      console.warn(`Provider "${provider.id}" chat failed:`, error.message)
-      // Last-resort fallback so /api/chat contract is always honored.
+      console.warn(`All providers failed for "${providerId}":`, error.message)
       const { buildChatFallback } = await import('./utils.js')
       return { text: buildChatFallback(prompt), provider: 'fallback', model, usedFallback: true }
     }
+  }
+
+  /**
+   * Stream a chat completion via the selected provider. Reuses the fallback
+   * chain logic (non-streaming) when the provider does not stream.
+   */
+  async streamChat({ provider: providerId, prompt, model, messages } = {}, onChunk) {
+    const primary = this.select(providerId)
+    const params = { prompt, model, messages }
+    if (!primary) {
+      if (onChunk) onChunk('')
+      return { text: '', provider: 'none', model, usedFallback: true, error: 'no-provider' }
+    }
+    if (!primary.streamChat) {
+      const result = await this.chat(params)
+      if (onChunk) onChunk(result.text)
+      return result
+    }
+    return primary.streamChat(params, onChunk)
   }
 }
 
@@ -167,6 +228,7 @@ export function createProviderManager(env = {}) {
     .register(new DeepSeekProvider(env.deepseek))
     .register(new MistralProvider(env.mistral))
     .register(new OpenRouterProvider(env.openrouter))
+    .register(new GroqProvider(env.groq))
   return manager
 }
 

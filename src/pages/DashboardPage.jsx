@@ -46,7 +46,11 @@ export default function DashboardPage() {
   const isDark = true
   const planLabel = subscription?.plan || 'free-trial'
   const planName = planLabel.replace(/-/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())
-  const remainingTrialDays = Math.max(0, Math.ceil(((subscription?.expiresAt || Date.now()) - Date.now()) / 86400000))
+  const remainingTrialDays = useMemo(() => {
+    const now = Date.now()
+    const expiresAt = subscription?.expiresAt || now
+    return Math.max(0, Math.ceil((expiresAt - now) / 86400000))
+  }, [subscription?.expiresAt])
   const planLimits = adminConfig?.planLimits?.[planLabel] || adminConfig?.planLimits?.['free-trial'] || {}
 
   const stats = useMemo(() => [

@@ -6,6 +6,13 @@ import { OpenAIImageProvider } from './OpenAIImageProvider.js'
 import { StabilityImageProvider } from './StabilityImageProvider.js'
 import { ReplicateImageProvider } from './ReplicateImageProvider.js'
 import { HuggingFaceImageProvider } from './HuggingFaceImageProvider.js'
+import { FluxImageProvider } from './FluxImageProvider.js'
+import { SDXLImageProvider } from './SDXLImageProvider.js'
+import { SD35ImageProvider } from './SD35ImageProvider.js'
+import { JuggernautXLProvider } from './JuggernautXLProvider.js'
+import { DreamShaperXLProvider } from './DreamShaperXLProvider.js'
+import { RealisticVisionProvider } from './RealisticVisionProvider.js'
+import { PlaygroundV2Provider } from './PlaygroundV2Provider.js'
 import { renderPlaceholderImage, buildRandomPrompt } from './imageUtils.js'
 
 /**
@@ -18,13 +25,24 @@ import { renderPlaceholderImage, buildRandomPrompt } from './imageUtils.js'
  * The default provider is the always-available local renderer, so the Image
  * Studio works immediately in any environment. Local self-hosted providers
  * (ComfyUI, Automatic1111, Ollama-compatible) perform real calls when
- * reachable; cloud providers are configuration placeholders until activated.
+ * reachable; cloud providers perform real calls when their API keys are present
+ * and gracefully fall back to the local renderer otherwise.
+ *
+ * A fallback chain lets a generation attempt the requested cloud provider and,
+ * on any failure, transparently retry with the next configured provider before
+ * finally rendering a local preview.
  */
 export class ImageProviderManager {
   constructor() {
     /** @type {Map<string, import('./BaseImageProvider.js').BaseImageProvider>} */
     this.providers = new Map()
     this.defaultProviderId = 'local'
+    /**
+     * Cloud fallback order used when a generation fails at the selected
+     * provider. Ordered from most-capable / most-likely-configured to least.
+     * @type {string[]}
+     */
+    this.fallbackChain = ['replicate', 'stability', 'openai-image', 'huggingface', 'flux', 'sdxl', 'sd35', 'juggernaut-xl', 'dreamshaper-xl', 'realistic-vision', 'playground-v2']
   }
 
   register(provider) {
@@ -112,36 +130,108 @@ export class ImageProviderManager {
     return map
   }
 
-  /** Text-to-image generation via the selected provider (never throws). */
-  async generate({ provider: providerId, ...params } = {}) {
-    const provider = this.select(providerId)
-    if (!provider) {
-      const fallback = renderPlaceholderImage(params)
-      return { images: [fallback], provider: 'none', usedFallback: true, text: 'No image provider available.' }
-    }
+  /**
+   * Discover models from Replicate's API and merge them into the Replicate /
+   * FLUX / SDXL provider catalogs so newly published versions show up without
+   * a code change. Never throws; on any failure the static catalogs remain.
+   */
+  async discoverReplicateModels() {
+    const replicate = this.get('replicate')
+    if (!replicate || !replicate.discoverModels) return
+    if (!replicate.isConfigured()) return
     try {
-      return await provider.generate(params)
+      const discovered = await replicate.discoverModels()
+      if (!Array.isArray(discovered) || !discovered.length) return
+      for (const pid of ['replicate', 'flux', 'sdxl']) {
+        const p = this.get(pid)
+        if (p && Array.isArray(p._models)) {
+          const existing = new Set(p._models.map((m) => m.id))
+          discovered.forEach((m) => { if (!existing.has(m.id)) p._models.push(m) })
+        }
+      }
     } catch (error) {
-      console.warn(`Image provider "${provider.id}" generate failed:`, error.message)
-      const fallback = renderPlaceholderImage(params)
-      return { images: [fallback], provider: 'fallback', usedFallback: true, text: 'Rendered local fallback preview.' }
+      console.warn('Replicate model discovery failed:', error.message)
     }
   }
 
-  /** Image editing via the selected provider (never throws). */
-  async edit({ provider: providerId, ...params } = {}) {
-    const provider = this.select(providerId)
-    if (!provider) {
+  /**
+   * Text-to-image generation via the selected provider. On failure it walks the
+   * fallback chain (configured cloud providers) and finally the local renderer.
+   * Never throws.
+   */
+  async generate({ provider: providerId, ...params } = {}) {
+    const primary = this.select(providerId)
+    if (!primary) {
       const fallback = renderPlaceholderImage(params)
       return { images: [fallback], provider: 'none', usedFallback: true, text: 'No image provider available.' }
     }
     try {
-      return await provider.edit(params)
+      const result = await primary.generate(params)
+      if (result && !result.usedFallback) return result
+      return this.fallbackChainGenerate(providerId, params, result)
     } catch (error) {
-      console.warn(`Image provider "${provider.id}" edit failed:`, error.message)
-      const fallback = renderPlaceholderImage(params)
-      return { images: [fallback], provider: 'fallback', usedFallback: true, text: 'Rendered local fallback preview.' }
+      console.warn(`Image provider "${primary.id}" generate failed:`, error.message)
+      return this.fallbackChainGenerate(providerId, params)
     }
+  }
+
+  /** Try the remaining configured cloud providers, then the local renderer. */
+  async fallbackChainGenerate(skipId, params, lastResult) {
+    for (const id of this.fallbackChain) {
+      if (id === skipId || !this.has(id)) continue
+      const provider = this.get(id)
+      if (!provider || !provider.isConfigured()) continue
+      try {
+        const result = await provider.generate(params)
+        if (result && !result.usedFallback) {
+          return { ...result, note: `Recovered via ${provider.name} after fallback.` }
+        }
+      } catch (error) {
+        console.warn(`Fallback provider "${id}" generate failed:`, error.message)
+      }
+    }
+    if (lastResult && Array.isArray(lastResult.images)) return lastResult
+    const fallback = renderPlaceholderImage(params)
+    return { images: [fallback], provider: 'fallback', usedFallback: true, text: 'Rendered local fallback preview.' }
+  }
+
+  /**
+   * Image editing via the selected provider. On failure it walks the fallback
+   * chain and finally the local renderer. Never throws.
+   */
+  async edit({ provider: providerId, ...params } = {}) {
+    const primary = this.select(providerId)
+    if (!primary) {
+      const fallback = renderPlaceholderImage(params)
+      return { images: [fallback], provider: 'none', usedFallback: true, text: 'No image provider available.' }
+    }
+    try {
+      const result = await primary.edit(params)
+      if (result && !result.usedFallback) return result
+      return this.fallbackChainEdit(providerId, params, result)
+    } catch (error) {
+      console.warn(`Image provider "${primary.id}" edit failed:`, error.message)
+      return this.fallbackChainEdit(providerId, params)
+    }
+  }
+
+  async fallbackChainEdit(skipId, params, lastResult) {
+    for (const id of this.fallbackChain) {
+      if (id === skipId || !this.has(id)) continue
+      const provider = this.get(id)
+      if (!provider || !provider.isConfigured()) continue
+      try {
+        const result = await provider.edit(params)
+        if (result && !result.usedFallback) {
+          return { ...result, note: `Recovered via ${provider.name} after fallback.` }
+        }
+      } catch (error) {
+        console.warn(`Fallback provider "${id}" edit failed:`, error.message)
+      }
+    }
+    if (lastResult && Array.isArray(lastResult.images)) return lastResult
+    const fallback = renderPlaceholderImage(params)
+    return { images: [fallback], provider: 'fallback', usedFallback: true, text: 'Rendered local fallback preview.' }
   }
 
   /** Random prompt helper (server-side generator). */
@@ -152,7 +242,7 @@ export class ImageProviderManager {
 
 /**
  * Build a manager pre-registered with every Phase 4 image provider.
- * Local providers work immediately; cloud providers are placeholders.
+ * Local providers work immediately; cloud providers activate when configured.
  */
 export function createImageProviderManager(env = {}) {
   const manager = new ImageProviderManager()
@@ -165,6 +255,13 @@ export function createImageProviderManager(env = {}) {
     .register(new StabilityImageProvider(env.stability))
     .register(new ReplicateImageProvider(env.replicate))
     .register(new HuggingFaceImageProvider(env.huggingface))
+    .register(new FluxImageProvider(env.flux))
+    .register(new SDXLImageProvider(env.sdxl))
+    .register(new SD35ImageProvider(env.sd35))
+    .register(new JuggernautXLProvider(env.juggernaut))
+    .register(new DreamShaperXLProvider(env.dreamshaper))
+    .register(new RealisticVisionProvider(env.realistic))
+    .register(new PlaygroundV2Provider(env.playground))
   return manager
 }
 
