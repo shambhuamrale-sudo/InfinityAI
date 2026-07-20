@@ -155,83 +155,38 @@ export class ImageProviderManager {
   }
 
   /**
-   * Text-to-image generation via the selected provider. On failure it walks the
-   * fallback chain (configured cloud providers) and finally the local renderer.
-   * Never throws.
+   * Text-to-image generation via the selected provider. Returns the result
+   * on success, or throws the provider error on failure. No silent fallback
+   * to local placeholders.
    */
   async generate({ provider: providerId, ...params } = {}) {
     const primary = this.select(providerId)
     if (!primary) {
-      const fallback = renderPlaceholderImage(params)
-      return { images: [fallback], provider: 'none', usedFallback: true, text: 'No image provider available.' }
+      throw new Error('No image provider available.')
     }
     try {
-      const result = await primary.generate(params)
-      if (result && !result.usedFallback) return result
-      return this.fallbackChainGenerate(providerId, params, result)
+      return await primary.generate(params)
     } catch (error) {
-      console.warn(`Image provider "${primary.id}" generate failed:`, error.message)
-      return this.fallbackChainGenerate(providerId, params)
+      console.warn(`Image provider "${providerId || primary.id}" generate failed:`, error.message)
+      throw new Error(`Image generation failed: ${error.message}`)
     }
-  }
-
-  /** Try the remaining configured cloud providers, then the local renderer. */
-  async fallbackChainGenerate(skipId, params, lastResult) {
-    for (const id of this.fallbackChain) {
-      if (id === skipId || !this.has(id)) continue
-      const provider = this.get(id)
-      if (!provider || !provider.isConfigured()) continue
-      try {
-        const result = await provider.generate(params)
-        if (result && !result.usedFallback) {
-          return { ...result, note: `Recovered via ${provider.name} after fallback.` }
-        }
-      } catch (error) {
-        console.warn(`Fallback provider "${id}" generate failed:`, error.message)
-      }
-    }
-    if (lastResult && Array.isArray(lastResult.images)) return lastResult
-    const fallback = renderPlaceholderImage(params)
-    return { images: [fallback], provider: 'fallback', usedFallback: true, text: 'Rendered local fallback preview.' }
   }
 
   /**
-   * Image editing via the selected provider. On failure it walks the fallback
-   * chain and finally the local renderer. Never throws.
+   * Image editing via the selected provider. Returns the result on success,
+   * or throws the provider error on failure. No silent fallback.
    */
   async edit({ provider: providerId, ...params } = {}) {
     const primary = this.select(providerId)
     if (!primary) {
-      const fallback = renderPlaceholderImage(params)
-      return { images: [fallback], provider: 'none', usedFallback: true, text: 'No image provider available.' }
+      throw new Error('No image provider available.')
     }
     try {
-      const result = await primary.edit(params)
-      if (result && !result.usedFallback) return result
-      return this.fallbackChainEdit(providerId, params, result)
+      return await primary.edit(params)
     } catch (error) {
-      console.warn(`Image provider "${primary.id}" edit failed:`, error.message)
-      return this.fallbackChainEdit(providerId, params)
+      console.warn(`Image provider "${providerId || primary.id}" edit failed:`, error.message)
+      throw new Error(`Image edit failed: ${error.message}`)
     }
-  }
-
-  async fallbackChainEdit(skipId, params, lastResult) {
-    for (const id of this.fallbackChain) {
-      if (id === skipId || !this.has(id)) continue
-      const provider = this.get(id)
-      if (!provider || !provider.isConfigured()) continue
-      try {
-        const result = await provider.edit(params)
-        if (result && !result.usedFallback) {
-          return { ...result, note: `Recovered via ${provider.name} after fallback.` }
-        }
-      } catch (error) {
-        console.warn(`Fallback provider "${id}" edit failed:`, error.message)
-      }
-    }
-    if (lastResult && Array.isArray(lastResult.images)) return lastResult
-    const fallback = renderPlaceholderImage(params)
-    return { images: [fallback], provider: 'fallback', usedFallback: true, text: 'Rendered local fallback preview.' }
   }
 
   /** Random prompt helper (server-side generator). */

@@ -291,8 +291,12 @@ export function useChat() {
           credentials: 'include',
           signal: abort.signal
         })
-        if (!response.ok) throw new Error(`HTTP ${response.status}`)
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({}))
+          throw new Error(errorData.error || `HTTP ${response.status}`)
+        }
         const data = await response.json()
+        if (data.error) throw new Error(data.error)
         const answer = data.text || data.response || 'No response generated.'
         setMessages((prev) => {
           const next = [...prev]

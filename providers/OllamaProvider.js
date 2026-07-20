@@ -91,9 +91,10 @@ export class OllamaProvider extends BaseProvider {
         return { text: data.response.trim(), provider: this.id, model: usedModel, usedFallback: false }
       }
     } catch (error) {
-      console.warn('Ollama unavailable, using fallback response:', error.message)
+      console.warn('Ollama chat failed:', error.message)
+      throw new Error(`Ollama is not reachable at ${this.baseUrl}: ${error.message}`)
     }
-    return { text: buildChatFallback(prompt), provider: 'fallback', model: usedModel, usedFallback: true }
+    throw new Error(`Ollama did not return a response for model "${usedModel}".`)
   }
 
   async streamChat({ prompt, model, messages } = {}, onChunk) {
@@ -135,10 +136,10 @@ export class OllamaProvider extends BaseProvider {
       }
       return { text: fullText.trim(), provider: this.id, model: usedModel, usedFallback: false }
     } catch (error) {
-      console.warn('Ollama streaming failed, using fallback:', error.message)
-      const fallback = buildChatFallback(prompt)
-      if (onChunk) onChunk(fallback)
-      return { text: fallback, provider: 'fallback', model: usedModel, usedFallback: true }
+      console.warn('Ollama streaming failed:', error.message)
+      const err = new Error(`Ollama streaming failed: ${error.message}`)
+      if (onChunk) onChunk('')
+      throw err
     }
   }
 }

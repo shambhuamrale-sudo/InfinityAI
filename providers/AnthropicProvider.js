@@ -110,7 +110,7 @@ export class AnthropicProvider extends BaseProvider {
   async chat({ prompt, model, messages } = {}) {
     const usedModel = model || this.defaultModel
     if (!this.isConfigured()) {
-      return { text: buildChatFallback(prompt), provider: 'fallback', model: usedModel, usedFallback: true, note: 'Anthropic API key not configured.' }
+      throw new Error(`${this.name} API key not configured.`)
     }
     try {
       const result = await withRetry(() =>
@@ -126,17 +126,17 @@ export class AnthropicProvider extends BaseProvider {
       )
       return result
     } catch (error) {
-      console.warn('Anthropic chat failed, using fallback:', error.message)
-      return { text: buildChatFallback(prompt), provider: 'fallback', model: usedModel, usedFallback: true, error: error.message }
+      console.warn('Anthropic chat failed:', error.message)
+      throw new Error(`Anthropic chat failed: ${error.message}`)
     }
   }
 
   async streamChat({ prompt, model, messages } = {}, onChunk) {
     const usedModel = model || this.defaultModel
     if (!this.isConfigured()) {
-      const fallback = buildChatFallback(prompt)
-      if (onChunk) onChunk(fallback)
-      return { text: fallback, provider: 'fallback', model: usedModel, usedFallback: true, note: 'Anthropic API key not configured.' }
+      const err = new Error(`${this.name} API key not configured.`)
+      if (onChunk) onChunk('')
+      throw err
     }
     try {
       const response = await withRetry(() =>
@@ -159,10 +159,10 @@ export class AnthropicProvider extends BaseProvider {
         onChunk
       })
     } catch (error) {
-      console.warn('Anthropic streaming failed, using fallback:', error.message)
-      const fallback = buildChatFallback(prompt)
-      if (onChunk) onChunk(fallback)
-      return { text: fallback, provider: 'fallback', model: usedModel, usedFallback: true, error: error.message }
+      console.warn('Anthropic streaming failed:', error.message)
+      const err = new Error(`Anthropic streaming failed: ${error.message}`)
+      if (onChunk) onChunk('')
+      throw err
     }
   }
 

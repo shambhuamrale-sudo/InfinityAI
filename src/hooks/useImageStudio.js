@@ -87,7 +87,10 @@ export function useImageStudio() {
       credentials: 'include',
       signal
     })
-    if (!res.ok) throw new Error(`HTTP ${res.status}`)
+    if (!res.ok) {
+      const errorData = await res.json().catch(() => ({}))
+      throw new Error(errorData.error || `HTTP ${res.status}`)
+    }
     return res.json()
   }, [])
 

@@ -103,7 +103,7 @@ export class CloudChatProvider extends BaseProvider {
   async chat({ prompt, model, messages } = {}) {
     const usedModel = model || this._models[0]?.id
     if (!this.isConfigured()) {
-      return { text: buildChatFallback(prompt), provider: 'fallback', model: usedModel, usedFallback: true, note: `${this.name} API key not configured.` }
+      throw new Error(`${this.name} API key not configured.`)
     }
     try {
       const result = await withRetry(() =>
@@ -119,17 +119,17 @@ export class CloudChatProvider extends BaseProvider {
       )
       return result
     } catch (error) {
-      console.warn(`${this.name} chat failed, using fallback:`, error.message)
-      return { text: buildChatFallback(prompt), provider: 'fallback', model: usedModel, usedFallback: true, error: error.message }
+      console.warn(`${this.name} chat failed:`, error.message)
+      throw new Error(`${this.name} chat failed: ${error.message}`)
     }
   }
 
   async streamChat({ prompt, model, messages } = {}, onChunk) {
     const usedModel = model || this._models[0]?.id
     if (!this.isConfigured()) {
-      const fallback = buildChatFallback(prompt)
-      if (onChunk) onChunk(fallback)
-      return { text: fallback, provider: 'fallback', model: usedModel, usedFallback: true, note: `${this.name} API key not configured.` }
+      const err = new Error(`${this.name} API key not configured.`)
+      if (onChunk) onChunk('')
+      throw err
     }
     try {
       const body = this.buildBody({ messages, prompt, model: usedModel })
@@ -158,10 +158,10 @@ export class CloudChatProvider extends BaseProvider {
         onChunk
       })
     } catch (error) {
-      console.warn(`${this.name} streaming failed, using fallback:`, error.message)
-      const fallback = buildChatFallback(prompt)
-      if (onChunk) onChunk(fallback)
-      return { text: fallback, provider: 'fallback', model: usedModel, usedFallback: true, error: error.message }
+      console.warn(`${this.name} streaming failed:`, error.message)
+      const err = new Error(`${this.name} streaming failed: ${error.message}`)
+      if (onChunk) onChunk('')
+      throw err
     }
   }
 

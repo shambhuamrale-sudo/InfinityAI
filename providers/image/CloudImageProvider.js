@@ -131,7 +131,7 @@ export class CloudImageProvider extends BaseImageProvider {
     } = params
 
     if (!this.isConfigured()) {
-      return this.fallbackResult(() => this.fallback.generate({ prompt, negativePrompt, width, height, seed, batchSize, model }), 'missing-api-key')
+      throw new Error(`${this.name} API key not configured.`)
     }
 
     try {
@@ -149,8 +149,8 @@ export class CloudImageProvider extends BaseImageProvider {
         text: `Generated ${images.length} image${images.length > 1 ? 's' : ''} via ${this.name}.`
       }
     } catch (error) {
-      console.warn(`[${this.id}] generate failed, using local fallback:`, error.message)
-      return this.fallbackResult(() => this.fallback.generate({ prompt, negativePrompt, width, height, seed, batchSize, model }), 'generate-error')
+      console.warn(`[${this.id}] generate failed:`, error.message)
+      throw new Error(`${this.name} generation failed: ${error.message}`)
     }
   }
 
@@ -169,7 +169,7 @@ export class CloudImageProvider extends BaseImageProvider {
     } = params
 
     if (!this.isConfigured()) {
-      return this.fallbackResult(() => this.fallback.edit({ operation, prompt, negativePrompt, image, width, height, seed, model }), 'missing-api-key')
+      throw new Error(`${this.name} API key not configured.`)
     }
 
     let input = null
@@ -180,8 +180,7 @@ export class CloudImageProvider extends BaseImageProvider {
     }
 
     if (!input) {
-      // Editing not supported by this provider's API surface → local edit.
-      return this.fallbackResult(() => this.fallback.edit({ operation, prompt, negativePrompt, image, width, height, seed, model }), 'edit-unsupported')
+      throw new Error(`${this.name} does not support ${operation}.`)
     }
 
     try {
@@ -199,28 +198,8 @@ export class CloudImageProvider extends BaseImageProvider {
         text: `${operation} completed via ${this.name}.`
       }
     } catch (error) {
-      console.warn(`[${this.id}] edit failed, using local fallback:`, error.message)
-      return this.fallbackResult(() => this.fallback.edit({ operation, prompt, negativePrompt, image, width, height, seed, model }), 'edit-error')
-    }
-  }
-
-  /** Wrap a local fallback result and tag it as a fallback. */
-  fallbackResult(producer, reason) {
-    try {
-      const result = producer()
-      return {
-        ...result,
-        provider: result.provider || 'local',
-        usedFallback: true,
-        note: `${reason}: rendered local preview.`
-      }
-    } catch {
-      return {
-        images: [renderPlaceholderImage({ prompt: 'fallback', width: 768, height: 768, label: 'Fallback' })],
-        provider: 'local',
-        usedFallback: true,
-        note: `${reason}: local fallback unavailable.`
-      }
+      console.warn(`[${this.id}] edit failed:`, error.message)
+      throw new Error(`${this.name} edit failed: ${error.message}`)
     }
   }
 }

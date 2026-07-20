@@ -98,7 +98,7 @@ export class GeminiProvider extends BaseProvider {
   async chat({ prompt, model, messages } = {}) {
     const usedModel = model || this.defaultModel
     if (!this.isConfigured()) {
-      return { text: buildChatFallback(prompt), provider: 'fallback', model: usedModel, usedFallback: true, note: 'Gemini API key not configured.' }
+      throw new Error(`${this.name} API key not configured.`)
     }
     try {
       const result = await withRetry(() =>
@@ -114,17 +114,17 @@ export class GeminiProvider extends BaseProvider {
       )
       return result
     } catch (error) {
-      console.warn('Gemini chat failed, using fallback:', error.message)
-      return { text: buildChatFallback(prompt), provider: 'fallback', model: usedModel, usedFallback: true, error: error.message }
+      console.warn('Gemini chat failed:', error.message)
+      throw new Error(`Gemini chat failed: ${error.message}`)
     }
   }
 
   async streamChat({ prompt, model, messages } = {}, onChunk) {
     const usedModel = model || this.defaultModel
     if (!this.isConfigured()) {
-      const fallback = buildChatFallback(prompt)
-      if (onChunk) onChunk(fallback)
-      return { text: fallback, provider: 'fallback', model: usedModel, usedFallback: true, note: 'Gemini API key not configured.' }
+      const err = new Error(`${this.name} API key not configured.`)
+      if (onChunk) onChunk('')
+      throw err
     }
     try {
       const response = await withRetry(() =>
@@ -178,10 +178,10 @@ export class GeminiProvider extends BaseProvider {
       }
       return { text: fullText.trim(), provider: this.id, model: usedModel, usedFallback: false, usage }
     } catch (error) {
-      console.warn('Gemini streaming failed, using fallback:', error.message)
-      const fallback = buildChatFallback(prompt)
-      if (onChunk) onChunk(fallback)
-      return { text: fallback, provider: 'fallback', model: usedModel, usedFallback: true, error: error.message }
+      console.warn('Gemini streaming failed:', error.message)
+      const err = new Error(`Gemini streaming failed: ${error.message}`)
+      if (onChunk) onChunk('')
+      throw err
     }
   }
 

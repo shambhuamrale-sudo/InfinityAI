@@ -28,8 +28,8 @@ export default function RegexGeneratorPage() {
       if (!res.ok) { const err = await res.text().catch(() => 'Request failed'); throw new Error(err || `HTTP ${res.status}`); }
       const data = await res.json()
       setResponse(data.response || 'Regex generation failed.')
-    } catch {
-      setResponse('Service unavailable. Please try again.')
+    } catch (error) {
+      setResponse(error.message || 'Service unavailable. Please try again.')
     } finally {
       setLoading(false)
     }

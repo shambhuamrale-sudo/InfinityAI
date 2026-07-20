@@ -793,9 +793,14 @@ app.post('/api/chat', userLimiter, async (req, res) => {
     await saveState({ ...state, usage: { ...state.usage, dayChats: state.usage.dayChats + 1, monthChats: state.usage.monthChats + 1 } })
     return res.end()
   }
-  const result = await providerManager.chat({ provider, prompt, model, messages })
-  await saveState({ ...state, usage: { ...state.usage, dayChats: state.usage.dayChats + 1, monthChats: state.usage.monthChats + 1 } })
-  res.json(result)
+  try {
+    const result = await providerManager.chat({ provider, prompt, model, messages })
+    await saveState({ ...state, usage: { ...state.usage, dayChats: state.usage.dayChats + 1, monthChats: state.usage.monthChats + 1 } })
+    res.json(result)
+  } catch (error) {
+    console.error('Chat error:', error)
+    res.status(400).json({ error: error.message || 'Chat service unavailable' })
+  }
 })
 
 // ── Provider system (Phase 2) — additive, read-only discovery endpoints ──────
@@ -874,11 +879,15 @@ app.post('/api/image', userLimiter, async (req, res) => {
   if (limitResponse) return
   const provider = req.body?.provider || state.adminConfig.providerConfig?.imageProvider || imageProviderManager.defaultProviderId
   const params = sanitizeImageParams(req.body)
-  const result = await imageProviderManager.generate({ provider, ...params })
-  // Keep a human-readable `text` field for legacy consumers.
-  if (!result.text) result.text = `Generated image for: ${params.prompt || 'your prompt'}`
-  await saveState({ ...state, usage: { ...state.usage, dayImages: state.usage.dayImages + 1, monthImages: state.usage.monthImages + 1 } })
-  res.json(result)
+  try {
+    const result = await imageProviderManager.generate({ provider, ...params })
+    if (!result.text) result.text = `Generated image for: ${params.prompt || 'your prompt'}`
+    await saveState({ ...state, usage: { ...state.usage, dayImages: state.usage.dayImages + 1, monthImages: state.usage.monthImages + 1 } })
+    res.json(result)
+  } catch (error) {
+    console.error('Image generation error:', error)
+    res.status(400).json({ error: error.message || 'Image generation unavailable' })
+  }
 })
 
 // Image editing operations: image-to-image, upscale, background removal, face
@@ -893,9 +902,14 @@ app.post('/api/image/edit', async (req, res) => {
   const params = sanitizeImageParams(req.body)
   const image = typeof req.body?.image === 'string' ? req.body.image : undefined
   const denoisingStrength = Number.isFinite(Number(req.body?.denoisingStrength)) ? Number(req.body.denoisingStrength) : 0.6
-  const result = await imageProviderManager.edit({ provider, operation, image, denoisingStrength, ...params })
-  await saveState({ ...state, usage: { ...state.usage, dayImages: state.usage.dayImages + 1, monthImages: state.usage.monthImages + 1 } })
-  res.json(result)
+  try {
+    const result = await imageProviderManager.edit({ provider, operation, image, denoisingStrength, ...params })
+    await saveState({ ...state, usage: { ...state.usage, dayImages: state.usage.dayImages + 1, monthImages: state.usage.monthImages + 1 } })
+    res.json(result)
+  } catch (error) {
+    console.error('Image edit error:', error)
+    res.status(400).json({ error: error.message || 'Image edit unavailable' })
+  }
 })
 
 // Image provider discovery (mirrors /api/providers for chat).
@@ -955,7 +969,7 @@ app.post('/api/writer', async (req, res) => {
     res.json({ response: result.text, provider: result.provider, usedFallback: result.usedFallback, tokens: result.tokens, time: result.time })
   } catch (error) {
     console.error('Writer error:', error)
-    res.status(500).json({ error: 'Writer service unavailable', response: buildFallbackText('writer', prompt), provider: 'fallback', usedFallback: true })
+    res.status(400).json({ error: error.message || 'Writer service unavailable' })
   }
 })
 
@@ -969,7 +983,7 @@ app.post('/api/code', async (req, res) => {
     res.json({ response: result.text, provider: result.provider, usedFallback: result.usedFallback, tokens: result.tokens, time: result.time })
   } catch (error) {
     console.error('Code error:', error)
-    res.status(500).json({ error: 'Code service unavailable', response: buildFallbackText('code', prompt), provider: 'fallback', usedFallback: true })
+    res.status(400).json({ error: error.message || 'Code service unavailable' })
   }
 })
 
@@ -1003,14 +1017,14 @@ app.post('/api/pdf', pdfUpload.single('file'), async (req, res) => {
     }
     const text = req.body?.text || extractedText
     if (!text && !userPrompt) {
-      return res.json({ response: buildFallbackText('pdf', 'document'), provider: 'backend', usedFallback: true })
+      return res.status(400).json({ error: 'No text or file provided for analysis.' })
     }
     const systemPrompt = `You are a document analysis expert. Analyze the provided document text and respond to the user's request. If no specific request is given, provide a comprehensive summary including: main topics, key findings, important data points, and suggested actions. Be concise but thorough.`
     const result = await providerManager.chat({ prompt: userPrompt || 'Summarize this document', messages: [{ role: 'system', content: systemPrompt }, { role: 'user', content: `Document text:\n\n${text}\n\n${userPrompt ? `Request: ${userPrompt}` : 'Please summarize this document.'}` }] })
     res.json({ response: result.text, provider: result.provider, usedFallback: result.usedFallback, text: text.slice(0, 5000), tokens: result.tokens, time: Date.now() - startTime })
   } catch (error) {
     console.error('PDF error:', error)
-    res.status(500).json({ error: 'PDF service unavailable', response: buildFallbackText('pdf', userPrompt), provider: 'fallback', usedFallback: true })
+    res.status(400).json({ error: error.message || 'PDF service unavailable' })
   }
 })
 
@@ -1025,7 +1039,7 @@ app.post('/api/translate', async (req, res) => {
     res.json({ response: result.text, provider: result.provider, usedFallback: result.usedFallback, target, source, tokens: result.tokens, time: result.time })
   } catch (error) {
     console.error('Translate error:', error)
-    res.status(500).json({ error: 'Translation service unavailable', response: buildFallbackText('translate', text), provider: 'fallback', usedFallback: true })
+    res.status(400).json({ error: error.message || 'Translation service unavailable' })
   }
 })
 
@@ -1038,7 +1052,7 @@ app.post('/api/vision', async (req, res) => {
     res.json({ response: result.text, provider: result.provider, usedFallback: result.usedFallback, tokens: result.tokens, time: result.time })
   } catch (error) {
     console.error('Vision error:', error)
-    res.status(500).json({ error: 'Vision service unavailable', response: 'Image analysis is currently unavailable. Please try again later.', provider: 'fallback', usedFallback: true })
+    res.status(400).json({ error: error.message || 'Vision service unavailable' })
   }
 })
 
@@ -1055,7 +1069,7 @@ app.post('/api/ocr', async (req, res) => {
     res.json({ response: result.text, provider: result.provider, usedFallback: result.usedFallback, language, tokens: result.tokens, time: result.time })
   } catch (error) {
     console.error('OCR error:', error)
-    res.status(500).json({ error: 'OCR service unavailable', response: 'Text extraction is currently unavailable. Please try again later.', provider: 'fallback', usedFallback: true })
+    res.status(400).json({ error: error.message || 'OCR service unavailable' })
   }
 })
 
@@ -1081,7 +1095,7 @@ If no errors are found, say "No significant grammar or spelling errors detected.
     res.json({ response: result.text, provider: result.provider, usedFallback: result.usedFallback, tokens: result.tokens, time: result.time })
   } catch (error) {
     console.error('Grammar error:', error)
-    res.status(500).json({ error: 'Grammar service unavailable', response: 'Grammar checking is currently unavailable. Please try again later.', provider: 'fallback', usedFallback: true })
+    res.status(400).json({ error: error.message || 'Grammar service unavailable' })
   }
 })
 
@@ -1106,7 +1120,7 @@ Keep it concise and actionable. Use proper email formatting.`
     res.json({ response: result.text, provider: result.provider, usedFallback: result.usedFallback, tokens: result.tokens, time: result.time })
   } catch (error) {
     console.error('Email error:', error)
-    res.status(500).json({ error: 'Email service unavailable', response: 'Email generation is currently unavailable. Please try again later.', provider: 'fallback', usedFallback: true })
+    res.status(400).json({ error: error.message || 'Email service unavailable' })
   }
 })
 
@@ -1132,7 +1146,7 @@ If generating a full resume, structure it with: Contact, Summary, Experience, Ed
     res.json({ response: result.text, provider: result.provider, usedFallback: result.usedFallback, section, tokens: result.tokens, time: result.time })
   } catch (error) {
     console.error('Resume error:', error)
-    res.status(500).json({ error: 'Resume service unavailable', response: 'Resume generation is currently unavailable. Please try again later.', provider: 'fallback', usedFallback: true })
+    res.status(400).json({ error: error.message || 'Resume service unavailable' })
   }
 })
 
@@ -1153,7 +1167,7 @@ Never include sensitive data patterns. If the request is ambiguous, ask clarifyi
     res.json({ response: result.text, provider: result.provider, usedFallback: result.usedFallback, dbType, tokens: result.tokens, time: result.time })
   } catch (error) {
     console.error('SQL error:', error)
-    res.status(500).json({ error: 'SQL service unavailable', response: 'SQL generation is currently unavailable. Please try again later.', provider: 'fallback', usedFallback: true })
+    res.status(400).json({ error: error.message || 'SQL service unavailable' })
   }
 })
 
@@ -1174,7 +1188,7 @@ Use standard regex syntax compatible with ${language}. If multiple valid pattern
     res.json({ response: result.text, provider: result.provider, usedFallback: result.usedFallback, language, tokens: result.tokens, time: result.time })
   } catch (error) {
     console.error('Regex error:', error)
-    res.status(500).json({ error: 'Regex service unavailable', response: 'Regex generation is currently unavailable. Please try again later.', provider: 'fallback', usedFallback: true })
+    res.status(400).json({ error: error.message || 'Regex service unavailable' })
   }
 })
 
@@ -1227,7 +1241,7 @@ app.post('/api/json', async (req, res) => {
     res.json(result)
   } catch (error) {
     console.error('JSON error:', error)
-    res.status(500).json({ error: 'JSON service unavailable', response: 'JSON processing is currently unavailable. Please try again later.', provider: 'fallback', usedFallback: true })
+    res.status(400).json({ error: error.message || 'JSON service unavailable' })
   }
 })
 
@@ -1248,7 +1262,7 @@ Be specific and practical. Show the exact changes needed.`
     res.json({ response: result.text, provider: result.provider, usedFallback: result.usedFallback, language, tokens: result.tokens, time: result.time })
   } catch (error) {
     console.error('Debug error:', error)
-    res.status(500).json({ error: 'Debug service unavailable', response: 'Debugging is currently unavailable. Please try again later.', provider: 'fallback', usedFallback: true })
+    res.status(400).json({ error: error.message || 'Debug service unavailable' })
   }
 })
 
@@ -1269,7 +1283,7 @@ Use clear, educational language. Format with code blocks and bullet points.`
     res.json({ response: result.text, provider: result.provider, usedFallback: result.usedFallback, language, detailLevel, tokens: result.tokens, time: result.time })
   } catch (error) {
     console.error('Explain error:', error)
-    res.status(500).json({ error: 'Explain service unavailable', response: 'Code explanation is currently unavailable. Please try again later.', provider: 'fallback', usedFallback: true })
+    res.status(400).json({ error: error.message || 'Explain service unavailable' })
   }
 })
 
@@ -1290,7 +1304,7 @@ Show before/after comparisons where helpful.`
     res.json({ response: result.text, provider: result.provider, usedFallback: result.usedFallback, language, goals, tokens: result.tokens, time: result.time })
   } catch (error) {
     console.error('Optimize error:', error)
-    res.status(500).json({ error: 'Optimize service unavailable', response: 'Code optimization is currently unavailable. Please try again later.', provider: 'fallback', usedFallback: true })
+    res.status(400).json({ error: error.message || 'Optimize service unavailable' })
   }
 })
 
@@ -1313,7 +1327,7 @@ Format with clear headings and bullet points. Be objective and thorough.`
     res.json({ response: result.text, provider: result.provider, usedFallback: result.usedFallback, analysisType, tokens: result.tokens, time: result.time })
   } catch (error) {
     console.error('Document analyze error:', error)
-    res.status(500).json({ error: 'Document analysis unavailable', response: 'Document analysis is currently unavailable. Please try again later.', provider: 'fallback', usedFallback: true })
+    res.status(400).json({ error: error.message || 'Document analysis unavailable' })
   }
 })
 
