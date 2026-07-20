@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import jsPDF from 'jspdf'
-
-const API_BASE = import.meta.env.VITE_API_BASE_URL || '/api'
+import { API_BASE } from '../config/api'
 
 // rAF-based throttle: coalesces high-frequency streaming updates to ~60fps so
 // React re-renders are capped regardless of token arrival rate.

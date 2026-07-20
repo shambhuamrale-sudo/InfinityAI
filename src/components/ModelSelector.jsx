@@ -2,8 +2,7 @@ import { AnimatePresence, motion } from 'framer-motion'
 import { Check, ChevronDown, Cloud, Cpu, Gauge, Sparkles, Star } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useAppContext } from '../context/useAppContext'
-
-const apiBase = import.meta.env.VITE_API_BASE_URL || '/api'
+import { API_BASE as apiBase } from '../config/api'
 
 const speedLabels = {
   'very-fast': 'Very fast',

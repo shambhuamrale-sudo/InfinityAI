@@ -51,6 +51,7 @@ import CodeExplainerPage from './pages/CodeExplainerPage'
 import CodeOptimizerPage from './pages/CodeOptimizerPage'
 import ForgotPasswordPage from './pages/ForgotPasswordPage'
 import { useAppContext } from './context/useAppContext'
+import { API_BASE } from './config/api'
 
 function AppShell() {
   const location = useLocation()
@@ -62,7 +63,7 @@ function AppShell() {
     const fetchStatuses = async () => {
       try {
         const [chatRes] = await Promise.all([
-          fetch('/api/providers/availability', { credentials: 'include' }).catch(() => null)
+          fetch(`${API_BASE}/providers/availability`, { credentials: 'include' }).catch(() => null)
         ])
         if (chatRes?.ok) {
           const data = await chatRes.json()

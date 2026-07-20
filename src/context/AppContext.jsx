@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { createDefaultState, normalizeState } from './stateSchema'
 import { AppContext } from './useAppContext'
+import { API_BASE } from '../config/api'
 
 const STORAGE_KEY = 'infinityai-state-v1'
 
@@ -32,7 +33,7 @@ export function AppProvider({ children }) {
   useEffect(() => {
     const hydrateAuth = async () => {
       try {
-        const apiBase = import.meta.env.VITE_API_BASE_URL || '/api'
+        const apiBase = API_BASE
         const response = await fetch(`${apiBase}/auth/me`, { credentials: 'include' })
         if (response.ok) {
           const data = await response.json()
@@ -64,7 +65,7 @@ export function AppProvider({ children }) {
       }
 
       try {
-        const apiBase = import.meta.env.VITE_API_BASE_URL || '/api'
+        const apiBase = API_BASE
         const [plansRes, configRes, serverStateRes] = await Promise.all([
           fetch(`${apiBase}/plans`, { credentials: 'include' }),
           fetch(`${apiBase}/config`, { credentials: 'include' }),
@@ -97,7 +98,7 @@ export function AppProvider({ children }) {
     let timeoutId
     const persistState = { ...state, toasts: [] }
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(persistState))
-    const apiBase = import.meta.env.VITE_API_BASE_URL || '/api'
+    const apiBase = API_BASE
     timeoutId = window.setTimeout(() => {
       fetch(`${apiBase}/state`, {
         method: 'POST',
@@ -375,7 +376,7 @@ export function AppProvider({ children }) {
   }
 
   const login = async (email, password) => {
-    const apiBase = import.meta.env.VITE_API_BASE_URL || '/api'
+    const apiBase = API_BASE
     try {
       const response = await fetch(`${apiBase}/auth/login`, {
         method: 'POST',
@@ -400,7 +401,7 @@ export function AppProvider({ children }) {
   }
 
   const signup = async (name, email, password) => {
-    const apiBase = import.meta.env.VITE_API_BASE_URL || '/api'
+    const apiBase = API_BASE
     try {
       const response = await fetch(`${apiBase}/auth/signup`, {
         method: 'POST',
@@ -425,7 +426,7 @@ export function AppProvider({ children }) {
   }
 
   const forgotPassword = async (email) => {
-    const apiBase = import.meta.env.VITE_API_BASE_URL || '/api'
+    const apiBase = API_BASE
     try {
       const response = await fetch(`${apiBase}/auth/forgot-password`, {
         method: 'POST',
@@ -447,7 +448,7 @@ export function AppProvider({ children }) {
   }
 
   const verifyResetOtp = async (email, otp) => {
-    const apiBase = import.meta.env.VITE_API_BASE_URL || '/api'
+    const apiBase = API_BASE
     try {
       const response = await fetch(`${apiBase}/auth/verify-reset-otp`, {
         method: 'POST',
@@ -468,7 +469,7 @@ export function AppProvider({ children }) {
   }
 
   const resetPassword = async (email, otp, password) => {
-    const apiBase = import.meta.env.VITE_API_BASE_URL || '/api'
+    const apiBase = API_BASE
     try {
       const response = await fetch(`${apiBase}/auth/reset-password`, {
         method: 'POST',
@@ -490,7 +491,7 @@ export function AppProvider({ children }) {
   }
 
   const logout = async () => {
-    const apiBase = import.meta.env.VITE_API_BASE_URL || '/api'
+    const apiBase = API_BASE
       await fetch(`${apiBase}/auth/logout`, { method: 'POST', credentials: 'include' }).catch(() => {})
     setAuth({ user: null, isAuthenticated: false, loading: false })
     setState((prev) => ({ ...prev, user: createDefaultState().user }))

@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-
-const apiBase = import.meta.env.VITE_API_BASE_URL || '/api'
+import { API_BASE as apiBase } from '../config/api'
 
 // Cache generated data URLs in-memory so re-rendering the gallery does not
 // re-decode large payloads and repeated lookups are cheap.

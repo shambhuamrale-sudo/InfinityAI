@@ -4,8 +4,7 @@ import BackgroundEffects from '../components/BackgroundEffects'
 import GlassPanel from '../components/GlassPanel'
 import ToolPageLayout from '../components/ToolPageLayout'
 import { useAppContext } from '../context/useAppContext'
-
-const apiBase = import.meta.env.VITE_API_BASE_URL || '/api'
+import { API_BASE as apiBase } from '../config/api'
 
 export default function RegexGeneratorPage() {
   const { addFavorite } = useAppContext()
