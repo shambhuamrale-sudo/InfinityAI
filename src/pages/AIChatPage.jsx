@@ -36,6 +36,7 @@ export default function AIChatPage() {
     textareaRef,
     setShowSearch,
     setSearchQuery,
+    loadConversations,
     createConversation,
     selectConversation,
     updateConversation,
