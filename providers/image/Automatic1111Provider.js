@@ -123,7 +123,7 @@ export class Automatic1111Provider extends BaseImageProvider {
     // img2img covers image-to-image, inpaint, outpaint (with mask handling upstream).
     if (image && (operation === 'image-to-image' || operation === 'inpaint' || operation === 'outpaint')) {
       try {
-        const initImage = image.startsWith('data:') ? image.split(',')[1] : image
+         const initImage = typeof image === 'string' && image.startsWith('data:') ? image.split(',')[1] : image
         const res = await fetchWithTimeout(`${this.baseUrl}/sdapi/v1/img2img`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },

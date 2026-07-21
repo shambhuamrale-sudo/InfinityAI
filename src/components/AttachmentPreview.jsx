@@ -2,7 +2,7 @@ import { memo } from 'react'
 import { X, FileText, File, Image, FileType } from 'lucide-react'
 
 function AttachmentPreview({ attachment, onRemove }) {
-  const isImage = attachment.type?.startsWith('image/')
+  const isImage = attachment?.type?.startsWith('image/')
   const isPdf = attachment.type === 'application/pdf'
   const isDocx = attachment.type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
   const isText = attachment.type === 'text/plain'

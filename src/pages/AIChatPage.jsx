@@ -1,6 +1,7 @@
 import { AnimatePresence, motion } from 'framer-motion'
 import { Bot, Send, Square, Copy, Sparkles, Plus, Check, Zap, ShieldCheck, Paperclip, Search, X, MoreVertical, Pin, Archive, Trash2, CopyPlus, Pencil, RefreshCw, AlertCircle, MessageSquareText, ChevronDown, Download, FileText, FileType } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import BackgroundEffects from '../components/BackgroundEffects'
 import GlassPanel from '../components/GlassPanel'
 import ModelSelector from '../components/ModelSelector'
@@ -11,13 +12,14 @@ import { ChatMarkdown } from '../components/ChatMarkdown'
 import { useAppContext } from '../context/useAppContext'
 import useChat from '../hooks/useChat'
 
-function Message({ role, content, timestamp, status, onRetry, onRegenerate, onEdit, attachments, isSearchMatch, searchQuery }) {
+function Message({ role, content, timestamp, status, onRetry, onRegenerate, onEdit, attachments, isSearchMatch, searchQuery, imageRedirect }) {
   const [copied, setCopied] = useState(false)
   const [isEditing, setIsEditing] = useState(false)
   const [editText, setEditText] = useState('')
   const isUser = role === 'user'
   const isError = status === 'error'
   const isStopped = status === 'stopped'
+  const navigate = useNavigate()
 
   const handleCopy = async () => {
     await navigator.clipboard.writeText(content)
@@ -54,7 +56,7 @@ function Message({ role, content, timestamp, status, onRetry, onRegenerate, onEd
         {isUser ? <Sparkles className="h-4 w-4" /> : <Bot className="h-4 w-4" />}
       </div>
       <div className={`group relative max-w-[78%] rounded-3xl px-4 py-3 text-sm leading-7 ${isUser ? 'bg-white/[0.06] text-white' : 'border border-white/8 bg-white/[0.03] text-slate-200'} ${isError ? 'border-red-500/30 bg-red-500/5' : ''}`}>
-        {attachments && attachments.length > 0 && (
+        {Array.isArray(attachments) && attachments.length > 0 && (
           <div className="mb-2 flex flex-wrap gap-2">
             {attachments.map((att) => (
               <AttachmentPreview key={att.id} attachment={att} />
@@ -80,6 +82,17 @@ function Message({ role, content, timestamp, status, onRetry, onRegenerate, onEd
             <div className={`space-y-1.5 ${isUser ? '' : 'prose-chat'}`}>
               {isUser ? (
                 <p className="whitespace-pre-wrap text-slate-200">{highlightMatch(content)}</p>
+              ) : imageRedirect ? (
+                <div className="space-y-3">
+                  <p className="text-slate-200">I can create that image for you.</p>
+                  <p className="text-slate-300">Please use AI Image for image generation.</p>
+                  <button
+                    onClick={() => navigate('/image')}
+                    className="rounded-2xl brand-gradient px-6 py-3 text-sm font-semibold text-white shadow-[0_12px_40px_-12px_rgba(129,140,248,0.6)] transition hover:brightness-110 hover:scale-[1.02] active:scale-[0.98]"
+                  >
+                    🎨 Open AI Image
+                  </button>
+                </div>
               ) : (
                 <ChatMarkdown content={content} />
               )}
@@ -444,6 +457,7 @@ export default function AIChatPage() {
                       timestamp={m.timestamp}
                       status={m.status}
                       attachments={m.attachments}
+                      imageRedirect={m.imageRedirect}
                       isSearchMatch={searchQuery ? (m.content || '').toLowerCase().includes(searchQuery.toLowerCase()) : false}
                       searchQuery={searchQuery}
                       onCopy={(text) => navigator.clipboard.writeText(text)}
@@ -478,7 +492,7 @@ export default function AIChatPage() {
 
             {/* Input Area */}
             <div className="mt-4">
-              {attachments.length > 0 && (
+              {Array.isArray(attachments) && attachments.length > 0 && (
                 <div className="mb-2 flex flex-wrap gap-2">
                   {attachments.map((att) => (
                     <AttachmentPreview key={att.id} attachment={att} onRemove={removeAttachment} />

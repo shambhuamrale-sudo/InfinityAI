@@ -145,9 +145,9 @@ export async function downloadImage(url, filename = 'infinityai-image') {
   try {
     let href = url
     let ext = 'png'
-    if (url.startsWith('data:image/svg')) ext = 'svg'
-    else if (url.startsWith('data:image/')) ext = url.slice(11, url.indexOf(';')) || 'png'
-    if (!url.startsWith('data:')) {
+    if (typeof url === 'string' && url.startsWith('data:image/svg')) ext = 'svg'
+    else if (typeof url === 'string' && url.startsWith('data:image/')) ext = url.slice(11, url.indexOf(';')) || 'png'
+    if (typeof url === 'string' && !url.startsWith('data:')) {
       const res = await fetch(url)
       const blob = await res.blob()
       href = URL.createObjectURL(blob)
@@ -158,7 +158,7 @@ export async function downloadImage(url, filename = 'infinityai-image') {
     document.body.appendChild(a)
     a.click()
     document.body.removeChild(a)
-    if (!url.startsWith('data:')) URL.revokeObjectURL(href)
+    if (typeof url === 'string' && !url.startsWith('data:')) URL.revokeObjectURL(href)
     return true
   } catch {
     return false

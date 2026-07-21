@@ -23,7 +23,7 @@ export default function ChatHistoryPage() {
     const q = query.trim().toLowerCase()
     if (q) {
       list = list.filter((c) => {
-        const msgText = (c.messages || []).map((m) => m.content).join(' ').toLowerCase()
+        const msgText = (c.messages || []).map((m) => m.content || '').join(' ').toLowerCase()
         return (c.title || '').toLowerCase().includes(q) || msgText.includes(q)
       })
     }

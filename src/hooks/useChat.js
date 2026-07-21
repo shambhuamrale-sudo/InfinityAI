@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import jsPDF from 'jspdf'
 import { API_BASE } from '../config/api'
+import { hasImageIntent } from '../utils/imageIntent'
 
 // rAF-based throttle: coalesces high-frequency streaming updates to ~60fps so
 // React re-renders are capped regardless of token arrival rate.
@@ -177,7 +178,7 @@ export function useChat() {
   const sendMessage = async (content, options = {}) => {
     if (!content.trim() && attachments.length === 0) return
     setError(null)
-    const userMessage = { role: 'user', content: content.trim(), timestamp: new Date().toISOString(), attachments: attachments.map((a) => ({ name: a.name, type: a.type, size: a.size })) }
+    const userMessage = { role: 'user', content: content.trim(), timestamp: new Date().toISOString(), attachments: Array.isArray(attachments) ? attachments.map((a) => ({ name: a.name, type: a.type, size: a.size })) : [] }
     const assistantPlaceholder = { role: 'assistant', content: '', timestamp: new Date().toISOString(), status: 'streaming' }
     setMessages((prev) => [...prev, userMessage, assistantPlaceholder])
     setAttachments([])
@@ -196,7 +197,16 @@ export function useChat() {
 
     let caughtErr = null
     try {
-      if (useStreaming) {
+      if (hasImageIntent(content.trim())) {
+        setMessages((prev) => {
+          const next = [...prev]
+          const last = next[next.length - 1]
+          if (last?.role === 'assistant') next[next.length - 1] = { ...last, content: 'I can create that image for you.\n\nPlease use AI Image for image generation.', imageRedirect: true, status: 'complete' }
+          return next
+        })
+        setStreamingStatus('idle')
+        setStreamingText('')
+      } else if (useStreaming) {
         const response = await fetch(`${API_BASE}/chat`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -214,7 +224,6 @@ export function useChat() {
         const reader = response.body?.getReader?.()
         const decoder = new TextDecoder()
         let fullText = ''
-        // Coalesce DOM writes to one per animation frame (~60fps).
         const flush = createFrameThrottle()
         const applyStream = (text) => {
           setStreamingText(text)
@@ -234,7 +243,7 @@ export function useChat() {
             const lines = buffer.split('\n')
             buffer = lines.pop() || ''
             for (const line of lines) {
-              if (line.startsWith('data: ')) {
+              if (typeof line === 'string' && line.startsWith('data: ')) {
                 const data = line.slice(6).trim()
                 if (data === '[DONE]') continue
                 try {
@@ -254,7 +263,7 @@ export function useChat() {
           }
           if (buffer.trim()) {
             const line = buffer.trim()
-            if (line.startsWith('data: ')) {
+            if (typeof line === 'string' && line.startsWith('data: ')) {
               const data = line.slice(6).trim()
               if (data !== '[DONE]') {
                 try {
@@ -276,7 +285,7 @@ export function useChat() {
         setStreamingText('')
         setMessages((prev) => {
           const next = [...prev]
-          next[next.length - 1] = { ...next[next.length - 1], status: 'complete' }
+          next[next.length - 1] = { ...next[next.length - 1], content: text, status: 'complete' }
           return next
         })
       } else {

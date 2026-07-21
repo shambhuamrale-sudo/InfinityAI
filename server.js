@@ -888,9 +888,16 @@ app.post('/api/image', userLimiter, async (req, res) => {
   const params = sanitizeImageParams(req.body)
   try {
     const result = await imageProviderManager.generate({ provider, ...params })
-    if (!result.text) result.text = `Generated image for: ${params.prompt || 'your prompt'}`
+    const normalized = {
+      success: true,
+      images: Array.isArray(result.images) ? result.images : [],
+      provider: result.provider || provider,
+      model: result.model || '',
+      usedFallback: Boolean(result.usedFallback),
+      text: result.text || `Generated image for: ${params.prompt || 'your prompt'}`
+    }
     await saveState({ ...state, usage: { ...state.usage, dayImages: state.usage.dayImages + 1, monthImages: state.usage.monthImages + 1 } })
-    res.json(result)
+    res.json(normalized)
   } catch (error) {
     console.error('Image generation error:', error)
     res.status(400).json({ error: error.message || 'Image generation unavailable' })
@@ -911,8 +918,17 @@ app.post('/api/image/edit', async (req, res) => {
   const denoisingStrength = Number.isFinite(Number(req.body?.denoisingStrength)) ? Number(req.body.denoisingStrength) : 0.6
   try {
     const result = await imageProviderManager.edit({ provider, operation, image, denoisingStrength, ...params })
+    const normalized = {
+      success: true,
+      images: Array.isArray(result.images) ? result.images : [],
+      provider: result.provider || provider,
+      model: result.model || '',
+      usedFallback: Boolean(result.usedFallback),
+      operation: result.operation || operation,
+      text: result.text || 'Image edit completed.'
+    }
     await saveState({ ...state, usage: { ...state.usage, dayImages: state.usage.dayImages + 1, monthImages: state.usage.monthImages + 1 } })
-    res.json(result)
+    res.json(normalized)
   } catch (error) {
     console.error('Image edit error:', error)
     res.status(400).json({ error: error.message || 'Image edit unavailable' })
