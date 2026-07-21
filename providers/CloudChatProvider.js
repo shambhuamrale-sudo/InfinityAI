@@ -78,7 +78,8 @@ export class CloudChatProvider extends BaseProvider {
     return {
       model: model || this._models[0]?.id,
       messages: toChatMessages(messages),
-      stream: false
+      stream: false,
+      max_tokens: 2048
     }
   }
 
