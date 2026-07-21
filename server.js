@@ -136,6 +136,8 @@ const defaultPlans = [
   { id: 'business', name: 'Business', price: 99, features: ['Highest limits', 'Admin controls', 'Dedicated success'] }
 ]
 
+const DEFAULT_PROVIDER = process.env.DEFAULT_PROVIDER || 'ollama'
+
 const defaultAdminConfig = {
   trialDays: 2,
   planLimits: {
@@ -146,7 +148,7 @@ const defaultAdminConfig = {
   },
   storageLimit: 100,
   providerStatuses: { ollama: 'healthy', comfyui: 'healthy', openrouter: 'healthy' },
-    providerConfig: { chatProvider: 'ollama', imageProvider: 'local', writerProvider: 'backend', codeProvider: 'backend', pdfProvider: 'backend', translateProvider: 'backend' },
+    providerConfig: { chatProvider: DEFAULT_PROVIDER, imageProvider: 'local', writerProvider: 'backend', codeProvider: 'backend', pdfProvider: 'backend', translateProvider: 'backend' },
   analytics: { totalUsers: 1284, activeUsers: 812, conversionRate: '8.4%' }
 }
 
@@ -406,6 +408,10 @@ function normalizeState(incoming = {}) {
     lastResetMonth: monthKey
   }
 
+  const incomingProviderConfig = (incoming.adminConfig && incoming.adminConfig.providerConfig) || {}
+  const storedChatProvider = incomingProviderConfig.chatProvider || defaultAdminConfig.providerConfig.chatProvider
+  const resolvedChatProvider = storedChatProvider === 'ollama' && DEFAULT_PROVIDER !== 'ollama' ? DEFAULT_PROVIDER : storedChatProvider
+
   return {
     ...defaultState,
     ...incoming,
@@ -421,7 +427,8 @@ function normalizeState(incoming = {}) {
       },
       providerConfig: {
         ...defaultAdminConfig.providerConfig,
-        ...((incoming.adminConfig && incoming.adminConfig.providerConfig) || {})
+        ...incomingProviderConfig,
+        chatProvider: resolvedChatProvider
       }
     },
     preferences: { ...defaultState.preferences, ...(incoming.preferences || {}) },
@@ -631,7 +638,7 @@ app.post('/api/conversations', async (req, res) => {
     id: `conv_${Date.now()}`,
     title: req.body?.title || 'New conversation',
     messages: req.body?.messages || [],
-    provider: req.body?.provider || state.adminConfig.providerConfig?.chatProvider || 'ollama',
+    provider: req.body?.provider || state.adminConfig.providerConfig?.chatProvider || DEFAULT_PROVIDER,
     model: req.body?.model || state.adminConfig.providerConfig?.chatModel || process.env.OLLAMA_MODEL || 'llama3.2',
     pinned: false,
     archived: false,
@@ -768,7 +775,7 @@ app.post('/api/chat', userLimiter, async (req, res) => {
   const state = await loadState()
   const limitResponse = await enforcePlanLimit(state, 'chat', res)
   if (limitResponse) return
-  const provider = req.body?.provider || state.adminConfig.providerConfig?.chatProvider || 'ollama'
+  const provider = req.body?.provider || state.adminConfig.providerConfig?.chatProvider || DEFAULT_PROVIDER
   const model = req.body?.model || state.adminConfig.providerConfig?.chatModel || process.env.OLLAMA_MODEL || 'llama3.2'
   const stream = Boolean(req.body?.stream)
   if (stream) {

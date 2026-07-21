@@ -34,7 +34,7 @@ const DEFAULT_STATE = {
     },
     storageLimit: 100,
     providerStatuses: { ollama: 'healthy', comfyui: 'healthy', openrouter: 'healthy' },
-    providerConfig: { chatProvider: 'ollama', imageProvider: 'local', writerProvider: 'backend', codeProvider: 'backend', pdfProvider: 'backend', translateProvider: 'backend' },
+    providerConfig: { chatProvider: 'openrouter', imageProvider: 'local', writerProvider: 'backend', codeProvider: 'backend', pdfProvider: 'backend', translateProvider: 'backend' },
     analytics: { totalUsers: 1284, activeUsers: 812, conversionRate: '8.4%' }
   },
   chats: [],
@@ -62,7 +62,7 @@ const DEFAULT_STATE = {
   activity: [],
   logs: [],
   coupons: [],
-  preferences: { notificationsEnabled: true, motionEnabled: true, autoSave: true, darkMode: true, reducedMotion: false, chatProvider: 'ollama', chatModel: '' },
+  preferences: { notificationsEnabled: true, motionEnabled: true, autoSave: true, darkMode: true, reducedMotion: false, chatProvider: 'openrouter', chatModel: '' },
   ui: {
     commandPaletteOpen: false,
     notificationsOpen: false,
