@@ -39,20 +39,20 @@ function CodeBlock({ children, language, inline }) {
   }
 
   return (
-    <div className="my-3 overflow-hidden rounded-xl border border-white/10 bg-[#0d1117]">
-      <div className="flex items-center justify-between border-b border-white/10 bg-white/5 px-4 py-2">
-        <span className="text-xs font-medium text-slate-400">{language || 'code'}</span>
+    <div className="my-4 overflow-hidden rounded-2xl border border-white/10 bg-[#0d1117] shadow-2xl shadow-black/20">
+      <div className="flex items-center justify-between border-b border-white/10 bg-white/[0.04] px-4 py-2.5">
+        <span className="text-xs font-semibold uppercase tracking-[0.15em] text-slate-400">{language || 'code'}</span>
         <div className="flex items-center gap-1">
-          <button onClick={handleCopy} className="flex items-center gap-1.5 rounded-md px-2 py-1 text-xs text-slate-400 transition hover:bg-white/10 hover:text-white" aria-label="Copy code">
+          <button onClick={handleCopy} className="flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs text-slate-400 transition hover:bg-white/10 hover:text-white" aria-label="Copy code">
             {copied ? <Check className="h-3.5 w-3.5 text-emerald-400" /> : <Copy className="h-3.5 w-3.5" />}
             {copied ? 'Copied' : 'Copy'}
           </button>
-          <button onClick={handleDownload} className="flex items-center gap-1.5 rounded-md px-2 py-1 text-xs text-slate-400 transition hover:bg-white/10 hover:text-white" aria-label="Download code">
+          <button onClick={handleDownload} className="flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs text-slate-400 transition hover:bg-white/10 hover:text-white" aria-label="Download code">
             <Download className="h-3.5 w-3.5" />
             Download
           </button>
           {lines.length > 50 && (
-            <button onClick={() => setExpanded(!expanded)} className="flex items-center gap-1.5 rounded-md px-2 py-1 text-xs text-slate-400 transition hover:bg-white/10 hover:text-white" aria-label="Toggle code">
+            <button onClick={() => setExpanded(!expanded)} className="flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs text-slate-400 transition hover:bg-white/10 hover:text-white" aria-label="Toggle code">
               {expanded ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
               {expanded ? 'Collapse' : 'Expand'}
             </button>
@@ -65,7 +65,7 @@ function CodeBlock({ children, language, inline }) {
           style={oneDark}
           showLineNumbers
           lineNumberStyle={{ color: '#484f58', fontSize: '0.75rem', minWidth: '2.5em', textAlign: 'right', paddingRight: '1em' }}
-          customStyle={{ margin: 0, borderRadius: 0, background: 'transparent', padding: '1rem', fontSize: '0.85rem' }}
+          customStyle={{ margin: 0, borderRadius: 0, background: 'transparent', padding: '1.25rem', fontSize: '0.85rem' }}
           wrapLongLines={false}
         >
           {displayCode}
