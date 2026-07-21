@@ -188,6 +188,7 @@ export default function AIChatPage() {
     messages,
     loading,
     error,
+    setError,
     streamingText,
     streamingStatus,
     searchQuery,
@@ -506,7 +507,6 @@ export default function AIChatPage() {
                 <span className="flex items-center gap-1.5"><Zap className="h-3.5 w-3.5 text-indigo-300" /> {loading ? 'Generating response…' : limitStatus}</span>
                 <div className="flex items-center gap-3">
                   <button onClick={() => setShowSearch(!showSearch)} className={`flex items-center gap-1 transition ${showSearch ? 'text-indigo-300' : 'hover:text-white'}`}><Search className="h-3.5 w-3.5" /> Search</button>
-                  {copied && <span className="flex items-center gap-1 text-emerald-300"><Check className="h-3.5 w-3.5" /> Copied</span>}
                   {error && <span className="flex items-center gap-1 text-red-400"><AlertCircle className="h-3.5 w-3.5" /> {error}</span>}
                 </div>
               </div>
