@@ -194,6 +194,7 @@ export default function AIChatPage() {
     searchQuery,
     showSearch,
     conversations,
+    loadConversations,
     attachments,
     dynamicSuggestions,
     scrollRef,
