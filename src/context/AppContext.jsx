@@ -95,6 +95,54 @@ export function AppProvider({ children }) {
 
   useEffect(() => {
     if (!hydrated) return
+    let cancelled = false
+    const migrateProvider = async () => {
+      try {
+        const apiBase = API_BASE
+        const [providersRes, availabilityRes] = await Promise.all([
+          fetch(`${apiBase}/providers`, { credentials: 'include' }),
+          fetch(`${apiBase}/providers/availability`, { credentials: 'include' })
+        ])
+        if (cancelled) return
+        if (!providersRes.ok || !availabilityRes.ok) return
+        const providersData = await providersRes.json()
+        const availabilityData = await availabilityRes.json()
+        const available = new Set()
+        for (const p of providersData.providers || []) {
+          if (availabilityData.availability?.[p.id]) available.add(p.id)
+        }
+        setState((prev) => {
+          const current = prev.preferences?.chatProvider
+          if (!current || available.has(current)) return prev
+          const adminProvider = prev.adminConfig?.providerConfig?.chatProvider
+          const fallback = available.has(adminProvider)
+            ? adminProvider
+            : (providersData.default && available.has(providersData.default) ? providersData.default : 'openrouter')
+          return {
+            ...prev,
+            preferences: { ...prev.preferences, chatProvider: fallback }
+          }
+        })
+      } catch {
+        setState((prev) => {
+          const current = prev.preferences?.chatProvider
+          const adminProvider = prev.adminConfig?.providerConfig?.chatProvider
+          if (current && adminProvider && current !== adminProvider) {
+            return {
+              ...prev,
+              preferences: { ...prev.preferences, chatProvider: adminProvider }
+            }
+          }
+          return prev
+        })
+      }
+    }
+    migrateProvider()
+    return () => { cancelled = true }
+  }, [hydrated])
+
+  useEffect(() => {
+    if (!hydrated) return
     let timeoutId
     const persistState = { ...state, toasts: [] }
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(persistState))

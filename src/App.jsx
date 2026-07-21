@@ -57,7 +57,7 @@ function AppShell() {
   const location = useLocation()
   const { setCommandPaletteOpen, setNotificationsOpen, auth } = useAppContext()
   const [loading, setLoading] = useState(false)
-  const [providerStatuses, setProviderStatuses] = useState({ ollama: 'unknown', comfyui: 'unknown' })
+  const [providerStatuses, setProviderStatuses] = useState({ openrouter: 'unknown', comfyui: 'unknown' })
 
   useEffect(() => {
     const fetchStatuses = async () => {
@@ -115,7 +115,7 @@ function AppShell() {
       {isProtectedRoute && auth.isAuthenticated ? (
         <div className="fixed bottom-4 right-4 z-[80] flex flex-col items-end gap-3">
           <div className="flex items-center gap-2 rounded-full border border-white/10 bg-[#0a0c14]/80 px-3 py-2 text-sm text-slate-300 backdrop-blur-xl">
-            <ProviderStatusIndicator provider="ollama" status={providerStatuses.ollama || 'unknown'} className="border-0 bg-transparent px-0 py-0" />
+            <ProviderStatusIndicator provider="openrouter" status={providerStatuses.openrouter || 'unknown'} className="border-0 bg-transparent px-0 py-0" />
             <ProviderStatusIndicator provider="comfyui" status={providerStatuses.comfyui || 'unknown'} className="border-0 bg-transparent px-0 py-0" />
           </div>
           <motion.button whileHover={{ scale: 1.03, y: -2 }} whileTap={{ scale: 0.97 }} onClick={() => setCommandPaletteOpen(true)} className="rounded-full brand-gradient p-4 text-white shadow-[0_16px_60px_-16px_rgba(129,140,248,0.7)]">

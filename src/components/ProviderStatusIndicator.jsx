@@ -2,7 +2,7 @@ import { motion } from 'framer-motion'
 import { CircleDashed, CircleDot } from 'lucide-react'
 import TooltipBubble from './TooltipBubble'
 
-export default function ProviderStatusIndicator({ provider = 'ollama', status = 'healthy', className = '' }) {
+export default function ProviderStatusIndicator({ provider = 'openrouter', status = 'healthy', className = '' }) {
   const isHealthy = status === 'healthy'
   return (
     <TooltipBubble label={`${provider} • ${status}`}>

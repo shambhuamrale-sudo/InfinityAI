@@ -40,7 +40,7 @@ export { ImageProviderManager, createImageProviderManager } from './image/ImageP
 import { createProviderManager } from './ProviderManager.js'
 import { createImageProviderManager } from './image/ImageProviderManager.js'
 
-const DEFAULT_PROVIDER = process.env.DEFAULT_PROVIDER || 'ollama'
+const DEFAULT_PROVIDER = process.env.DEFAULT_PROVIDER || 'openrouter'
 
 /** Shared singleton used by the server. */
 export const providerManager = createProviderManager({}, DEFAULT_PROVIDER)

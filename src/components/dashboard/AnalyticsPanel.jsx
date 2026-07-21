@@ -15,11 +15,11 @@ export default function AnalyticsPanel({ adminConfig, isDark }) {
   const tick = isDark ? '#94a3b8' : '#64748b'
 
   const statusItems = [
-    { name: 'Ollama Status', value: providerStatuses.ollama || 'healthy', detail: providerConfig.chatProvider || 'ollama', icon: RadioTower },
-    { name: 'ComfyUI Status', value: providerStatuses.comfyui || 'healthy', detail: providerConfig.imageProvider || 'comfyui', icon: Layers3 },
-    { name: 'Current Model', value: providerConfig.chatProvider === 'ollama' ? 'Llama 3.2' : 'Hybrid', detail: 'Streaming responses', icon: Cpu },
+    { name: 'Provider Status', value: 'Available', detail: providerConfig.chatProvider || 'openrouter', icon: RadioTower },
+    { name: 'Image Provider', value: 'Available', detail: providerConfig.imageProvider || 'local', icon: Layers3 },
+    { name: 'Current Model', value: 'Hybrid', detail: 'Streaming responses', icon: Cpu },
     { name: 'Response Time', value: '118ms', detail: 'Low-latency', icon: Gauge },
-    { name: 'GPU Status', value: providerStatuses.ollama === 'healthy' ? 'Ready' : 'Pending', detail: 'Inference available', icon: ShieldCheck },
+    { name: 'GPU Status', value: 'Ready', detail: 'Inference available', icon: ShieldCheck },
     { name: 'Queue Status', value: 'Stable', detail: 'No backlog', icon: Activity }
   ]
 

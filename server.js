@@ -136,7 +136,7 @@ const defaultPlans = [
   { id: 'business', name: 'Business', price: 99, features: ['Highest limits', 'Admin controls', 'Dedicated success'] }
 ]
 
-const DEFAULT_PROVIDER = process.env.DEFAULT_PROVIDER || 'ollama'
+const DEFAULT_PROVIDER = process.env.DEFAULT_PROVIDER || 'openrouter'
 
 const defaultAdminConfig = {
   trialDays: 2,
@@ -147,7 +147,7 @@ const defaultAdminConfig = {
     business: { maxChatsPerDay: 2000, maxImagesPerDay: 800, maxChatsPerMonth: 50000, maxImagesPerMonth: 20000 }
   },
   storageLimit: 100,
-  providerStatuses: { ollama: 'healthy', comfyui: 'healthy', openrouter: 'healthy' },
+    providerStatuses: { openrouter: 'healthy', comfyui: 'healthy' },
     providerConfig: { chatProvider: DEFAULT_PROVIDER, imageProvider: 'local', writerProvider: 'backend', codeProvider: 'backend', pdfProvider: 'backend', translateProvider: 'backend' },
   analytics: { totalUsers: 1284, activeUsers: 812, conversionRate: '8.4%' }
 }

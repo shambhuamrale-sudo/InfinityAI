@@ -4,7 +4,7 @@ import { useAppContext } from '../../context/useAppContext'
 
 export default function DashboardTopbar({ title, subtitle, isDark }) {
   const { adminConfig, preferences, updatePreferences, setCommandPaletteOpen, setNotificationsOpen, notifications } = useAppContext()
-  const provider = adminConfig?.providerConfig?.chatProvider || 'ollama'
+  const provider = adminConfig?.providerConfig?.chatProvider || 'openrouter'
   const unread = (notifications || []).filter((n) => n.unread).length
   const muted = 'text-slate-400'
   const soft = 'bg-white/[0.04] border-white/10'

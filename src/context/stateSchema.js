@@ -33,7 +33,7 @@ const DEFAULT_STATE = {
       business: { maxChatsPerDay: 2000, maxImagesPerDay: 800, maxChatsPerMonth: 50000, maxImagesPerMonth: 20000 }
     },
     storageLimit: 100,
-    providerStatuses: { ollama: 'healthy', comfyui: 'healthy', openrouter: 'healthy' },
+    providerStatuses: { openrouter: 'healthy', comfyui: 'healthy' },
     providerConfig: { chatProvider: 'openrouter', imageProvider: 'local', writerProvider: 'backend', codeProvider: 'backend', pdfProvider: 'backend', translateProvider: 'backend' },
     analytics: { totalUsers: 1284, activeUsers: 812, conversionRate: '8.4%' }
   },

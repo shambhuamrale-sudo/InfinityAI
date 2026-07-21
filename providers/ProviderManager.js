@@ -23,7 +23,7 @@ import { GroqProvider } from './GroqProvider.js'
  * means registering it here, nothing else changes.
  */
 export class ProviderManager {
-  constructor(defaultProviderId = process.env.DEFAULT_PROVIDER || 'ollama') {
+  constructor(defaultProviderId = process.env.DEFAULT_PROVIDER || 'openrouter') {
     /** @type {Map<string, import('./BaseProvider.js').BaseProvider>} */
     this.providers = new Map()
     this.defaultProviderId = defaultProviderId
@@ -173,7 +173,7 @@ export class ProviderManager {
  * Build a manager pre-registered with every Phase 2 provider.
  * Only Ollama is fully implemented; the rest are configured placeholders.
  */
-export function createProviderManager(env = {}, defaultProviderId = process.env.DEFAULT_PROVIDER || 'ollama') {
+export function createProviderManager(env = {}, defaultProviderId = process.env.DEFAULT_PROVIDER || 'openrouter') {
   const manager = new ProviderManager(defaultProviderId)
   manager
     .register(new OllamaProvider(env.ollama))

@@ -44,7 +44,7 @@ export default function ModelSelector({ className = '' }) {
   const [loading, setLoading] = useState(true)
   const containerRef = useRef(null)
 
-  const selectedProvider = preferences?.chatProvider || 'ollama'
+  const selectedProvider = preferences?.chatProvider || 'openrouter'
   const selectedModel = preferences?.chatModel || ''
 
   useEffect(() => {

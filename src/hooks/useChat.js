@@ -194,6 +194,7 @@ export function useChat() {
     const currentMessages = [...messagesRef.current, userMessage]
     const useStreaming = options.streaming !== false
 
+    let caughtErr = null
     try {
       if (useStreaming) {
         const response = await fetch(`${API_BASE}/chat`, {
@@ -306,6 +307,7 @@ export function useChat() {
         setStreamingStatus('idle')
       }
     } catch (err) {
+      caughtErr = err
       if (err.name !== 'AbortError') {
         setError(err.message)
         setMessages((prev) => {
@@ -321,7 +323,7 @@ export function useChat() {
       if (controllerRef.current === abort) {
         controllerRef.current = null
       }
-      if (!err || err.name !== 'AbortError') {
+      if (!caughtErr || caughtErr.name !== 'AbortError') {
         if (conversationId) {
           const current = messagesRef.current
           const trimmed = current.filter((m) => !(m.role === 'assistant' && m.status === 'streaming'))
