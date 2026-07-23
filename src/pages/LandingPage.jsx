@@ -1,6 +1,8 @@
 import { motion, useMotionValue, useSpring } from 'framer-motion'
-import { ArrowRight, Bot, Wand2, Code2, FileText, Languages, Sparkles, Zap, PlayCircle, BrainCircuit, ShieldCheck } from 'lucide-react'
+import { useState, useRef } from 'react'
+import { ArrowRight, Bot, Wand2, Code2, FileText, Languages, Sparkles, Zap, PlayCircle, BrainCircuit, ShieldCheck, Cloud, Monitor, CheckCircle2 } from 'lucide-react'
 import { useNavigate, Link } from 'react-router-dom'
+import { useAppContext } from '../context/useAppContext'
 import BackgroundEffects from '../components/BackgroundEffects'
 import GlassPanel from '../components/GlassPanel'
 import PremiumButton from '../components/PremiumButton'
@@ -42,11 +44,21 @@ export default function LandingPage() {
   const smoothX = useSpring(x, { stiffness: 140, damping: 18 })
   const smoothY = useSpring(y, { stiffness: 140, damping: 18 })
   const navigate = useNavigate()
+  const { state, updatePreferences } = useAppContext()
+  const [selectedMode, setSelectedMode] = useState(null)
+  const navigateTimer = useRef(null)
 
   const handleMove = (event) => {
     const bounds = event.currentTarget.getBoundingClientRect()
     x.set(event.clientX - bounds.left - 120)
     y.set(event.clientY - bounds.top - 120)
+  }
+
+  const handleSelectMode = (mode) => {
+    setSelectedMode(mode)
+    updatePreferences({ defaultAIMode: mode })
+    if (navigateTimer.current) clearTimeout(navigateTimer.current)
+    navigateTimer.current = setTimeout(() => navigate('/signup'), 400)
   }
 
   return (
@@ -66,6 +78,17 @@ export default function LandingPage() {
           <a href="#faq" className="transition hover:text-white">FAQ</a>
         </nav>
         <div className="flex items-center gap-3">
+          {(state?.preferences?.defaultAIMode === 'local' || selectedMode === 'local') ? (
+            <div className="hidden items-center gap-2 rounded-full border border-violet-400/20 bg-violet-500/10 px-3 py-2 text-sm font-medium text-violet-200 sm:flex">
+              <Monitor className="h-4 w-4" />
+              <span>Local AI</span>
+            </div>
+          ) : (
+            <div className="hidden items-center gap-2 rounded-full border border-indigo-400/20 bg-indigo-500/10 px-3 py-2 text-sm font-medium text-indigo-200 sm:flex">
+              <Cloud className="h-4 w-4" />
+              <span>Cloud AI</span>
+            </div>
+          )}
           <Link to="/login" className="hidden rounded-full border border-white/10 bg-white/[0.04] px-4 py-2 text-sm font-medium text-slate-200 transition hover:bg-white/10 sm:inline-block">Login</Link>
           <PremiumButton onClick={() => navigate('/signup')} className="px-4 py-2.5">Get started</PremiumButton>
         </div>
@@ -123,6 +146,94 @@ export default function LandingPage() {
               </div>
             </GlassPanel>
           </motion.div>
+        </section>
+
+        <section className="relative z-10 border-b border-white/8 bg-white/[0.02]">
+          <div className="mx-auto max-w-7xl px-6 py-20 sm:px-8 lg:px-10">
+            <div className="mx-auto max-w-3xl text-center">
+              <p className="text-sm uppercase tracking-[0.3em] text-indigo-300">Choose Your AI Experience</p>
+              <h2 className="mt-4 text-3xl font-semibold tracking-tight text-white sm:text-4xl lg:text-5xl">Pick your preferred AI mode</h2>
+              <p className="mt-4 text-lg leading-8 text-slate-400">Cloud AI is instant and powerful. Local AI runs on your machine with full privacy. Choose what works best for you.</p>
+            </div>
+            <div className="mt-16 grid gap-6 lg:grid-cols-2 lg:max-w-5xl lg:mx-auto">
+              <motion.div
+                initial={{ opacity: 0, y: 16 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true }}
+                transition={{ duration: 0.5, delay: 0.0 }}
+              >
+                <GlassPanel
+                  hover={selectedMode !== 'cloud'}
+                  className={`group cursor-pointer p-8 text-left ${selectedMode === 'cloud' ? 'border-emerald-400/40 bg-emerald-500/[0.07] shadow-[0_0_40px_rgba(52,211,153,0.15)]' : ''}`}
+                  onClick={() => handleSelectMode('cloud')}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter' || event.key === ' ') {
+                      event.preventDefault()
+                      handleSelectMode('cloud')
+                    }
+                  }}
+                  role="button"
+                  tabIndex={0}
+                >
+                  <div className="mb-6 inline-flex rounded-2xl bg-indigo-500/10 p-3 text-indigo-300 ring-1 ring-indigo-400/20">
+                    <Cloud className="h-8 w-8" />
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <h3 className="text-2xl font-semibold text-white">☁ Cloud AI</h3>
+                    {selectedMode === 'cloud' && <CheckCircle2 className="h-5 w-5 text-emerald-400" />}
+                  </div>
+                  <p className="mt-3 text-base leading-7 text-slate-400">Instant setup, no installation, and powerful cloud providers — best for most users who want to start immediately.</p>
+                  <ul className="mt-6 space-y-3">
+                    <li className="flex items-center gap-3 text-sm text-slate-300"><CheckCircle2 className="h-4 w-4 text-emerald-400" /> Instant setup</li>
+                    <li className="flex items-center gap-3 text-sm text-slate-300"><CheckCircle2 className="h-4 w-4 text-emerald-400" /> No installation</li>
+                    <li className="flex items-center gap-3 text-sm text-slate-300"><CheckCircle2 className="h-4 w-4 text-emerald-400" /> Uses cloud providers</li>
+                    <li className="flex items-center gap-3 text-sm text-slate-300"><CheckCircle2 className="h-4 w-4 text-emerald-400" /> Best for most users</li>
+                  </ul>
+                  <div className="mt-8">
+                    <PremiumButton className="w-full" onClick={(event) => { event.stopPropagation(); handleSelectMode('cloud') }}>{selectedMode === 'cloud' ? '✓ Cloud AI Selected' : 'Continue with Cloud'} <Cloud className="h-4 w-4" /></PremiumButton>
+                  </div>
+                </GlassPanel>
+              </motion.div>
+              <motion.div
+                initial={{ opacity: 0, y: 16 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true }}
+                transition={{ duration: 0.5, delay: 0.1 }}
+              >
+                <GlassPanel
+                  hover={selectedMode !== 'local'}
+                  className={`group cursor-pointer p-8 text-left ${selectedMode === 'local' ? 'border-emerald-400/40 bg-emerald-500/[0.07] shadow-[0_0_40px_rgba(52,211,153,0.15)]' : ''}`}
+                  onClick={() => handleSelectMode('local')}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter' || event.key === ' ') {
+                      event.preventDefault()
+                      handleSelectMode('local')
+                    }
+                  }}
+                  role="button"
+                  tabIndex={0}
+                >
+                  <div className="mb-6 inline-flex rounded-2xl bg-violet-500/10 p-3 text-violet-300 ring-1 ring-violet-400/20">
+                    <Monitor className="h-8 w-8" />
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <h3 className="text-2xl font-semibold text-white">🖥 Local AI</h3>
+                    {selectedMode === 'local' && <CheckCircle2 className="h-5 w-5 text-emerald-400" />}
+                  </div>
+                  <p className="mt-3 text-base leading-7 text-slate-400">Runs entirely on your computer. Works offline, stays private, and uses Ollama or LM Studio for full control.</p>
+                  <ul className="mt-6 space-y-3">
+                    <li className="flex items-center gap-3 text-sm text-slate-300"><CheckCircle2 className="h-4 w-4 text-emerald-400" /> Runs on your computer</li>
+                    <li className="flex items-center gap-3 text-sm text-slate-300"><CheckCircle2 className="h-4 w-4 text-emerald-400" /> Offline capable</li>
+                    <li className="flex items-center gap-3 text-sm text-slate-300"><CheckCircle2 className="h-4 w-4 text-emerald-400" /> Private</li>
+                    <li className="flex items-center gap-3 text-sm text-slate-300"><CheckCircle2 className="h-4 w-4 text-emerald-400" /> Uses Ollama / LM Studio</li>
+                  </ul>
+                  <div className="mt-8">
+                    <PremiumButton className="w-full" onClick={(event) => { event.stopPropagation(); handleSelectMode('local') }}>{selectedMode === 'local' ? '✓ Local AI Selected' : 'Continue with Local'} <Monitor className="h-4 w-4" /></PremiumButton>
+                  </div>
+                </GlassPanel>
+              </motion.div>
+            </div>
+          </div>
         </section>
 
         <section className="border-y border-white/8 bg-white/[0.02]">

@@ -24,7 +24,7 @@ const NAV = [
   { label: 'Settings', icon: Settings, route: '/settings' }
 ]
 
-export default function DashboardSidebar({ collapsed, onToggle }) {
+export default function DashboardSidebar({ collapsed, onToggle, isDark: _isDark, className = '' }) {
   const navigate = useNavigate()
   const location = useLocation()
   const { user } = useAppContext()
@@ -40,7 +40,7 @@ export default function DashboardSidebar({ collapsed, onToggle }) {
       initial={false}
       animate={{ width: collapsed ? 88 : 284 }}
       transition={{ duration: 0.32, ease: [0.22, 1, 0.36, 1] }}
-      className={`relative z-30 hidden h-screen shrink-0 flex-col border-r ${surface} backdrop-blur-2xl lg:flex`}
+      className={`relative z-30 flex h-screen shrink-0 flex-col border-r ${surface} backdrop-blur-2xl ${className}`}
     >
       <div className="flex items-center gap-3 px-5 py-5">
         <div className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl bg-gradient-to-br from-indigo-500 to-fuchsia-500 shadow-[0_10px_30px_rgba(168,85,247,0.35)]">

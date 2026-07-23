@@ -436,10 +436,6 @@ export function useChat() {
     }
   }
 
-  const removeAttachment = (id) => {
-    setAttachments((prev) => prev.filter((a) => a.id !== id))
-  }
-
   const exportConversation = async (format) => {
     if (!conversationId) return null
     try {
@@ -552,7 +548,6 @@ export function useChat() {
     regenerateResponse,
     editMessage,
     uploadAttachment,
-    removeAttachment,
     exportConversation,
     clearMessages,
     scrollToBottom

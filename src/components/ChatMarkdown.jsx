@@ -1,4 +1,4 @@
-import { memo, useMemo, useState, useEffect } from 'react'
+import { memo, useMemo, useState, useEffect, useCallback } from 'react'
 import { Check, Copy, Download, ChevronDown, ChevronUp } from 'lucide-react'
 
 const FALLBACK_CLASSES = 'rounded-2xl bg-[#0d1117] p-5 font-mono text-sm leading-7 text-slate-300 overflow-x-auto whitespace-pre-wrap'
@@ -9,11 +9,11 @@ function CodeBlock({ children, language, inline }) {
   const [highlighter, setHighlighter] = useState(null)
   const codeString = String(children).replace(/\n$/, '')
 
-  const handleCopy = async () => {
+  const handleCopy = useCallback(async () => {
     await navigator.clipboard.writeText(codeString)
     setCopied(true)
-    setTimeout(() => setCopied(false), 1500)
-  }
+    setTimeout(() => setCopied(false), 2000)
+  }, [codeString])
 
   const handleDownload = () => {
     const blob = new Blob([codeString], { type: 'text/plain' })
@@ -33,18 +33,23 @@ function CodeBlock({ children, language, inline }) {
 
   useEffect(() => {
     if (inline) return
+    let cancelled = false
     import('react-syntax-highlighter').then((m) => {
+      if (cancelled) return
       import('react-syntax-highlighter/dist/esm/styles/prism').then((styles) => {
+        if (cancelled) return
         setHighlighter({ Prism: m.Prism, oneDark: styles.oneDark })
       }).catch(() => {
+        if (cancelled) return
         setHighlighter({ Prism: m.Prism, oneDark: null })
       })
     }).catch(() => {})
+    return () => { cancelled = true }
   }, [inline, language])
 
   if (inline) {
     return (
-      <code className="rounded-md bg-white/10 px-1.5 py-0.5 font-mono text-[0.85em] text-indigo-200">
+      <code className="rounded-md bg-gradient-to-r from-indigo-500/15 to-purple-500/15 px-1.5 py-0.5 font-mono text-[0.85em] text-indigo-200 border border-indigo-400/10">
         {codeString}
       </code>
     )
@@ -54,20 +59,20 @@ function CodeBlock({ children, language, inline }) {
   const oneDark = highlighter?.oneDark || null
 
   return (
-    <div className="my-4 overflow-hidden rounded-2xl border border-white/10 bg-[#0d1117] shadow-2xl shadow-black/20">
+    <div className="my-4 overflow-hidden rounded-2xl border border-white/10 bg-[#0d1117] shadow-2xl shadow-black/30">
       <div className="flex items-center justify-between border-b border-white/10 bg-white/[0.04] px-4 py-2.5">
         <span className="text-xs font-semibold uppercase tracking-[0.15em] text-slate-400">{language || 'code'}</span>
         <div className="flex items-center gap-1">
-          <button onClick={handleCopy} className="flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs text-slate-400 transition hover:bg-white/10 hover:text-white" aria-label="Copy code">
+          <button onClick={handleCopy} className="flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs text-slate-400 transition-all duration-200 hover:bg-white/10 hover:text-white" aria-label="Copy code">
             {copied ? <Check className="h-3.5 w-3.5 text-emerald-400" /> : <Copy className="h-3.5 w-3.5" />}
             {copied ? 'Copied' : 'Copy'}
           </button>
-          <button onClick={handleDownload} className="flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs text-slate-400 transition hover:bg-white/10 hover:text-white" aria-label="Download code">
+          <button onClick={handleDownload} className="flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs text-slate-400 transition-all duration-200 hover:bg-white/10 hover:text-white" aria-label="Download code">
             <Download className="h-3.5 w-3.5" />
             Download
           </button>
           {lines.length > 50 && (
-            <button onClick={() => setExpanded(!expanded)} className="flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs text-slate-400 transition hover:bg-white/10 hover:text-white" aria-label="Toggle code">
+            <button onClick={() => setExpanded(!expanded)} className="flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs text-slate-400 transition-all duration-200 hover:bg-white/10 hover:text-white" aria-label="Toggle code">
               {expanded ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
               {expanded ? 'Collapse' : 'Expand'}
             </button>
@@ -144,7 +149,7 @@ function ChatMarkdown({ content }) {
           const level = trimmed.match(/^(#{1,6})/)[1].length
           const text = trimmed.replace(/^#{1,6}\s+/, '')
           const sizes = ['text-2xl', 'text-xl', 'text-lg', 'text-base', 'text-sm', 'text-xs']
-          elements.push(<h2 key={i} className={`${sizes[level - 1] || 'text-base'} mt-4 mb-2 font-bold text-white`}>{renderInline(text)}</h2>)
+          elements.push(<h2 key={i} className={`${sizes[level - 1] || 'text-base'} mt-4 mb-2 font-bold text-white tracking-tight`}>{renderInline(text)}</h2>)
         } else if (/^```/.test(trimmed)) {
           const codeLines = []
           i++
@@ -163,7 +168,7 @@ function ChatMarkdown({ content }) {
             quoteLines.push(lines[i].replace(/^>\s?/, ''))
             i++
           }
-          elements.push(<blockquote key={i} className="my-2 border-l-4 border-indigo-400 pl-4 text-slate-300 italic">{renderInline(quoteLines.join('\n'))}</blockquote>)
+          elements.push(<blockquote key={i} className="my-2 border-l-4 border-indigo-400 pl-4 text-slate-300 italic bg-indigo-400/[0.04] rounded-r-lg pr-2">{renderInline(quoteLines.join('\n'))}</blockquote>)
           continue
         } else if (/^[-*+]\s+\[[ x]\]/.test(trimmed)) {
           const taskItems = []
@@ -172,8 +177,8 @@ function ChatMarkdown({ content }) {
             const checked = taskLine.includes('[x]')
             const text = taskLine.replace(/^[-*+]\s+\[[ x]\]\s*/, '')
             taskItems.push(
-              <li key={i} className="flex items-start gap-2">
-                <span className={`mt-1.5 inline-block h-4 w-4 shrink-0 rounded border ${checked ? 'border-indigo-400 bg-indigo-500/30' : 'border-white/20'} flex items-center justify-center`}>
+              <li key={i} className="flex items-start gap-2.5">
+                <span className={`mt-1.5 inline-block h-4 w-4 shrink-0 rounded-md border ${checked ? 'border-indigo-400 bg-indigo-500/30' : 'border-white/20'} flex items-center justify-center transition-all`}>
                   {checked && <Check className="h-2.5 w-2.5 text-indigo-300" />}
                 </span>
                 <span className={checked ? 'text-slate-400 line-through' : 'text-slate-200'}>{renderInline(text)}</span>
@@ -181,7 +186,7 @@ function ChatMarkdown({ content }) {
             )
             i++
           }
-          elements.push(<ul key={i} className="my-2 space-y-1 pl-1">{taskItems}</ul>)
+          elements.push(<ul key={i} className="my-2 space-y-1.5 pl-1">{taskItems}</ul>)
           continue
         } else if (/^[-*+]\s+/.test(trimmed)) {
           const listItems = []
@@ -189,7 +194,7 @@ function ChatMarkdown({ content }) {
             listItems.push(<li key={i} className="ml-5 list-disc text-slate-300">{renderInline(lines[i].trim().replace(/^[-*+]\s+/, ''))}</li>)
             i++
           }
-          elements.push(<ul key={i} className="my-2 space-y-1">{listItems}</ul>)
+          elements.push(<ul key={i} className="my-2 space-y-1.5">{listItems}</ul>)
           continue
         } else if (/^\d+\.\s+/.test(trimmed)) {
           const listItems = []
@@ -197,7 +202,7 @@ function ChatMarkdown({ content }) {
             listItems.push(<li key={i} className="ml-5 list-decimal text-slate-300">{renderInline(lines[i].trim().replace(/^\d+\.\s+/, ''))}</li>)
             i++
           }
-          elements.push(<ol key={i} className="my-2 space-y-1">{listItems}</ol>)
+          elements.push(<ol key={i} className="my-2 space-y-1.5">{listItems}</ol>)
           continue
         } else if (/^\|?(.+)\|$/.test(trimmed) && trimmed.includes('|')) {
           const tableLines = []
@@ -207,11 +212,14 @@ function ChatMarkdown({ content }) {
           }
           elements.push(renderTable(tableLines))
           continue
-        } else if (trimmed === '') {
+        } else if (trimmed === '' || trimmed === '\u00A0') {
+          i++
+          continue
+        } else if (trimmed.startsWith('---')) {
           i++
           continue
         } else {
-          elements.push(<p key={i} className="my-1.5 text-slate-200 leading-7">{renderInline(line)}</p>)
+          elements.push(<p key={i} className="my-1.5 text-slate-200 leading-7">{renderInline(trimmed)}</p>)
         }
         i++
       }
@@ -228,15 +236,15 @@ function renderTable(lines) {
   const headers = parseRow(lines[0])
   const rows = lines.slice(2).map(parseRow)
   return (
-    <div className="my-3 overflow-x-auto rounded-lg border border-white/10">
+    <div className="my-3 overflow-x-auto rounded-xl border border-white/10 bg-white/[0.02] shadow-[0_4px_16px_-8px_rgba(0,0,0,0.2)]">
       <table className="min-w-full text-sm">
-        <thead className="bg-white/5">
-          <tr>{headers.map((h, i) => <th key={i} className="px-4 py-2 text-left font-semibold text-white">{renderInline(h)}</th>)}</tr>
+        <thead className="bg-white/[0.05]">
+          <tr>{headers.map((h, i) => <th key={i} className="px-4 py-2.5 text-left font-semibold text-white">{renderInline(h)}</th>)}</tr>
         </thead>
         <tbody className="divide-y divide-white/5">
           {rows.map((row, i) => (
-            <tr key={i} className="transition hover:bg-white/5">
-              {row.map((cell, j) => <td key={j} className="px-4 py-2 text-slate-300">{renderInline(cell)}</td>)}
+            <tr key={i} className="transition-all duration-150 hover:bg-white/[0.04]">
+              {row.map((cell, j) => <td key={j} className="px-4 py-2.5 text-slate-300">{renderInline(cell)}</td>)}
             </tr>
           ))}
         </tbody>
@@ -253,12 +261,12 @@ function renderInline(text) {
       return <strong key={i} className="font-semibold text-white">{part.slice(2, -2)}</strong>
     }
     if (part.startsWith('`') && part.endsWith('`')) {
-      return <code key={i} className="rounded-md bg-white/10 px-1.5 py-0.5 font-mono text-[0.85em] text-indigo-200">{part.slice(1, -1)}</code>
+      return <code key={i} className="rounded-md bg-gradient-to-r from-indigo-500/15 to-purple-500/15 px-1.5 py-0.5 font-mono text-[0.85em] text-indigo-200 border border-indigo-400/10">{part.slice(1, -1)}</code>
     }
     if (part.startsWith('[')) {
       const match = part.match(/\[([^\]]+)\]\(([^)]+)\)/)
       if (match) {
-        return <a key={i} href={match[2]} target="_blank" rel="noopener noreferrer" className="text-indigo-300 underline hover:text-indigo-200">{match[1]}</a>
+        return <a key={i} href={match[2]} target="_blank" rel="noopener noreferrer" className="text-indigo-300 underline hover:text-indigo-200 transition-colors">{match[1]}</a>
       }
     }
     return <span key={i}>{part}</span>

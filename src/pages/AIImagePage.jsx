@@ -1,15 +1,13 @@
 import { motion, AnimatePresence } from 'framer-motion'
-import { ImagePlus, Wand2, Sparkles, Dice5, X, Sliders, GalleryHorizontalEnd, Search, Star, Folder, History, Layers, Square } from 'lucide-react'
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState, useCallback } from 'react'
+import { ImagePlus, X, PanelLeftClose, PanelRightClose, PanelLeftOpen, PanelRightOpen, Star, Folder } from 'lucide-react'
 import BackgroundEffects from '../components/BackgroundEffects'
-import GlassPanel from '../components/GlassPanel'
-import EmptyState from '../components/EmptyState'
-import ImageCard from '../components/ImageCard'
-import { useAppContext } from '../context/useAppContext'
 import useImageStudio, { cacheImage } from '../hooks/useImageStudio'
 import { ASPECT_RATIOS, RESOLUTIONS, PRESET_STYLES, EDIT_OPERATIONS, downloadImage } from '../components/imageStudio'
-
-const PAGE_SIZE = 12
+import { useAppContext } from '../context/useAppContext'
+import PromptPanel from '../components/image-studio/PromptPanel'
+import WorkspacePanel from '../components/image-studio/WorkspacePanel'
+import GalleryPanel from '../components/image-studio/GalleryPanel'
 
 export default function AIImagePage() {
   const {
@@ -44,13 +42,18 @@ export default function AIImagePage() {
   const [style, setStyle] = useState(saved.style || 'none')
   const [preview, setPreview] = useState(null)
   const [statusText, setStatusText] = useState('')
+  const [elapsed, setElapsed] = useState(0)
 
   // Gallery controls
-  const [query, setQuery] = useState('')
-  const [filter, setFilter] = useState('all') // all | favorites | collection id
-  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE)
   const [editTarget, setEditTarget] = useState(null)
-  const sentinelRef = useRef(null)
+
+  // Panel visibility
+  const [showPromptPanel, setShowPromptPanel] = useState(true)
+  const [showGalleryPanel, setShowGalleryPanel] = useState(true)
+
+  // Track elapsed time during generation
+  const startTimeRef = useRef(null)
+  const timerRef = useRef(null)
 
   const activeProvider = useMemo(
     () => studio.providers.find((p) => p.id === provider) || studio.providers[0],
@@ -75,16 +78,31 @@ export default function AIImagePage() {
     return { width: round8(ratio.width), height: round8(ratio.height) }
   }, [aspectRatio, resolution])
 
-  const persistSettings = () => {
-    saveImageSettings({ provider, model, aspectRatio, steps, guidanceScale, seed, batchSize, style, negativePrompt })
-  }
+  useEffect(() => {
+    if (studio.generating) {
+      startTimeRef.current = Date.now()
+      timerRef.current = window.setInterval(() => {
+        setElapsed((Date.now() - startTimeRef.current) / 1000)
+      }, 100)
+    } else {
+      if (timerRef.current) window.clearInterval(timerRef.current)
+      setElapsed(0)
+    }
+    return () => {
+      if (timerRef.current) window.clearInterval(timerRef.current)
+    }
+  }, [studio.generating])
 
-  const buildPrompt = () => {
+  const persistSettings = useCallback(() => {
+    saveImageSettings({ provider, model, aspectRatio, steps, guidanceScale, seed, batchSize, style, negativePrompt })
+  }, [provider, model, aspectRatio, steps, guidanceScale, seed, batchSize, style, negativePrompt, saveImageSettings])
+
+  const buildPrompt = useCallback(() => {
     const suffix = (PRESET_STYLES.find((s) => s.id === style) || {}).suffix || ''
     return `${prompt.trim()}${suffix}`
-  }
+  }, [prompt, style])
 
-  const runGenerate = async (overridePrompt) => {
+  const runGenerate = useCallback(async (overridePrompt) => {
     const finalPrompt = overridePrompt !== undefined ? overridePrompt : buildPrompt()
     if (!finalPrompt.trim()) {
       addToast({ kind: 'error', title: 'Prompt required', message: 'Describe the image you want to generate.' })
@@ -127,9 +145,9 @@ export default function AIImagePage() {
       settings: { aspectRatio, resolution, steps, guidanceScale, seed, batchSize, style, width: dimensions.width, height: dimensions.height }
     })
     if (!entry) setStatusText('Daily limit reached. Upgrade to continue generating images.')
-  }
+  }, [buildPrompt, negativePrompt, provider, model, dimensions, steps, guidanceScale, batchSize, preferences, seed, studio, addImageEntry, addToast, persistSettings, prompt, aspectRatio, resolution, style])
 
-  const runEdit = async (operation, entry) => {
+  const runEdit = useCallback(async (operation, entry) => {
     const source = entry.images?.[0]
     setStatusText(`Applying ${operation}…`)
     const data = await studio.edit({
@@ -163,9 +181,9 @@ export default function AIImagePage() {
       settings: entry.settings || {}
     })
     setEditTarget(null)
-  }
+  }, [provider, model, dimensions, steps, guidanceScale, preferences, studio, addImageEntry, addToast])
 
-  const duplicateSettings = (entry) => {
+  const duplicateSettings = useCallback((entry) => {
     const s = entry.settings || {}
     if (s.aspectRatio) setAspectRatio(s.aspectRatio)
     if (s.resolution) setResolution(s.resolution)
@@ -179,9 +197,10 @@ export default function AIImagePage() {
     setNegativePrompt(entry.negativePrompt || '')
     setPrompt(entry.prompt || '')
     addToast({ kind: 'success', title: 'Settings applied', message: 'Generation settings copied from this image.' })
-  }
+  }, [addToast])
 
-  const handleCardAction = async (action, entry, extra) => {
+  const handleCardAction = useCallback(async (action, data) => {
+    const entry = data.entry || data
     if (action === 'download') {
       const url = entry.images?.[0]?.url
       if (url) {
@@ -195,6 +214,7 @@ export default function AIImagePage() {
       duplicateSettings(entry)
     } else if (action === 'delete') {
       deleteImageEntry(entry.id)
+      if (preview && entry.images?.[0]?.url === preview) setPreview(null)
       addToast({ kind: 'info', title: 'Image deleted', message: 'Removed from your gallery.' })
     } else if (action === 'share') {
       const url = entry.images?.[0]?.url || ''
@@ -210,52 +230,19 @@ export default function AIImagePage() {
     } else if (action === 'favorite') {
       toggleImageFavorite(entry.id)
     } else if (action === 'tags') {
-      setImageTags(entry.id, extra)
+      setImageTags(entry.id, data)
     } else if (action === 'collection') {
       setEditTarget({ mode: 'collection', entry })
     }
-  }
-
-  // Filter + search + infinite scroll
-  const filtered = useMemo(() => {
-    let list = images || []
-    if (filter === 'favorites') list = list.filter((i) => i.favorite)
-    else if (filter !== 'all') list = list.filter((i) => i.collectionId === filter)
-    const q = query.trim().toLowerCase()
-    if (q) {
-      list = list.filter((i) =>
-        (i.prompt || '').toLowerCase().includes(q) ||
-        (i.tags || []).some((t) => t.toLowerCase().includes(q))
-      )
-    }
-    return list
-  }, [images, filter, query])
-
-  const visible = filtered.slice(0, visibleCount)
-
-  useEffect(() => {
-    setVisibleCount(PAGE_SIZE)
-  }, [filter, query])
-
-  useEffect(() => {
-    const node = sentinelRef.current
-    if (!node) return
-    const observer = new IntersectionObserver((entries) => {
-      if (entries[0].isIntersecting && visibleCount < filtered.length) {
-        setVisibleCount((c) => c + PAGE_SIZE)
-      }
-    }, { rootMargin: '300px' })
-    observer.observe(node)
-    return () => observer.disconnect()
-  }, [visibleCount, filtered.length])
+  }, [duplicateSettings, deleteImageEntry, preview, addToast, runGenerate, toggleImageFavorite, setImageTags])
 
   const collections = imageStudio?.collections || []
   const promptHistory = imageStudio?.promptHistory || []
 
-  const handleRandomPrompt = async () => {
+  const handleRandomPrompt = useCallback(async () => {
     const rp = await studio.randomPrompt()
     if (rp) setPrompt(rp)
-  }
+  }, [studio, setPrompt])
 
   const handleNewCollection = () => {
     const name = window.prompt('Collection name')
@@ -271,274 +258,226 @@ export default function AIImagePage() {
   return (
     <div className="app-canvas relative min-h-screen overflow-hidden text-white">
       <BackgroundEffects />
-      <div className="relative z-10 mx-auto max-w-[100rem] px-4 py-6 sm:px-6 lg:px-8">
-        <motion.header initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} className="glass flex flex-col gap-4 rounded-[1.75rem] p-5 sm:flex-row sm:items-center sm:justify-between">
+      <div className="relative z-10 mx-auto max-w-[100rem] px-2 py-3 sm:px-4 lg:px-6 h-screen flex flex-col">
+        {/* Top Header */}
+        <motion.header
+          initial={{ opacity: 0, y: -16 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="glass flex items-center justify-between rounded-[1.5rem] p-4 shrink-0"
+        >
           <div className="flex items-center gap-3">
-            <div className="grid h-11 w-11 place-items-center rounded-2xl bg-white/[0.05] text-fuchsia-300 ring-1 ring-white/10"><ImagePlus className="h-5 w-5" /></div>
+            <div className="grid h-10 w-10 place-items-center rounded-2xl bg-white/[0.05] text-fuchsia-300 ring-1 ring-white/10 shadow-[0_0_16px_rgba(168,85,247,0.15)]">
+              <ImagePlus className="h-5 w-5" />
+            </div>
             <div>
-              <p className="text-sm uppercase tracking-[0.3em] text-indigo-300">AI Image Studio</p>
-              <h1 className="text-xl font-semibold tracking-tight text-white sm:text-2xl">Design premium visuals with full control.</h1>
+              <p className="text-xs uppercase tracking-[0.3em] text-indigo-300">AI Image Studio</p>
+              <h1 className="text-lg font-semibold tracking-tight text-white">Professional Image Generation</h1>
             </div>
           </div>
           <div className="flex items-center gap-2">
             {studio.generating ? (
-              <button onClick={studio.cancel} className="flex items-center gap-2 rounded-full border border-red-400/30 bg-red-500/10 px-4 py-2.5 text-sm font-semibold text-red-200 transition hover:bg-red-500/20">
+              <button onClick={studio.cancel} className="flex items-center gap-2 rounded-full border border-red-400/30 bg-red-500/10 px-4 py-2.5 text-sm font-semibold text-red-200 transition hover:bg-red-500/20 hover:scale-105 active:scale-95">
                 <X className="h-4 w-4" /> Cancel
               </button>
             ) : null}
-            <button onClick={() => addFavorite({ id: 'image', label: 'AI Image', path: '/image' })} className="grid h-11 w-11 place-items-center rounded-full border border-white/10 bg-white/[0.04] text-slate-300 transition hover:bg-white/10" aria-label="Save"><Star className="h-4 w-4" /></button>
+            <button
+              onClick={() => setShowPromptPanel((v) => !v)}
+              className={`hidden lg:grid h-9 w-9 place-items-center rounded-full border transition-all duration-200 hover:scale-110 ${showPromptPanel ? 'border-indigo-400/30 bg-indigo-500/10 text-indigo-200' : 'border-white/10 bg-white/[0.04] text-slate-300 hover:bg-white/10'}`}
+              aria-label="Toggle prompt panel"
+            >
+              {showPromptPanel ? <PanelLeftClose className="h-4 w-4" /> : <PanelLeftOpen className="h-4 w-4" />}
+            </button>
+            <button
+              onClick={() => setShowGalleryPanel((v) => !v)}
+              className={`hidden xl:grid h-9 w-9 place-items-center rounded-full border transition-all duration-200 hover:scale-110 ${showGalleryPanel ? 'border-indigo-400/30 bg-indigo-500/10 text-indigo-200' : 'border-white/10 bg-white/[0.04] text-slate-300 hover:bg-white/10'}`}
+              aria-label="Toggle gallery panel"
+            >
+              {showGalleryPanel ? <PanelRightClose className="h-4 w-4" /> : <PanelRightOpen className="h-4 w-4" />}
+            </button>
+            <button onClick={() => addFavorite({ id: 'image', label: 'AI Image', path: '/image' })} className="grid h-9 w-9 place-items-center rounded-full border border-white/10 bg-white/[0.04] text-slate-300 transition hover:bg-white/10 hover:scale-110 active:scale-95" aria-label="Save">
+              <Star className="h-4 w-4" />
+            </button>
           </div>
         </motion.header>
 
-        {studio.generating || studio.progress > 0 ? (
-          <div className="mt-4 h-1.5 w-full overflow-hidden rounded-full bg-white/10">
-            <motion.div className="h-full brand-gradient" animate={{ width: `${studio.progress}%` }} transition={{ ease: 'easeOut', duration: 0.2 }} />
-          </div>
-        ) : null}
-
-        <div className="mt-6 grid gap-6 xl:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
-          {/* ── Left: workspace + settings ─────────────────────────── */}
-          <div className="space-y-6">
-            <GlassPanel className="p-5">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2 text-sm font-semibold text-white"><Sparkles className="h-4 w-4 text-indigo-300" /> Prompt</div>
-                <button onClick={handleRandomPrompt} className="flex items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5 text-xs text-slate-300 transition hover:bg-white/10"><Dice5 className="h-3.5 w-3.5" /> Random</button>
-              </div>
-              <textarea
-                value={prompt}
-                onChange={(e) => setPrompt(e.target.value)}
-                onKeyDown={(e) => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) runGenerate() }}
-                rows={4}
-                placeholder="Describe the image you want to create… (Ctrl+Enter to generate)"
-                className="mt-3 w-full resize-none rounded-2xl border border-white/8 bg-white/[0.03] p-3 text-sm text-white outline-none transition focus:border-indigo-400/40 placeholder:text-slate-500"
-              />
-              <label className="mt-3 block text-xs font-medium uppercase tracking-wide text-slate-400">Negative prompt</label>
-              <input
-                value={negativePrompt}
-                onChange={(e) => setNegativePrompt(e.target.value)}
-                placeholder="What to avoid (e.g. blurry, low quality, extra fingers)"
-                className="mt-1.5 w-full rounded-2xl border border-white/8 bg-white/[0.03] p-2.5 text-sm text-white outline-none transition focus:border-indigo-400/40 placeholder:text-slate-500"
-              />
-
-              <div className="mt-4">
-                <p className="text-xs font-medium uppercase tracking-wide text-slate-400">Preset styles</p>
-                <div className="mt-2 flex flex-wrap gap-2">
-                  {PRESET_STYLES.map((s) => (
-                    <button key={s.id} onClick={() => setStyle(s.id)} className={`rounded-full border px-3 py-1.5 text-xs transition ${style === s.id ? 'border-indigo-400/50 bg-indigo-500/20 text-white' : 'border-white/8 bg-white/[0.04] text-slate-300 hover:bg-white/10'}`}>{s.label}</button>
-                  ))}
-                </div>
-              </div>
-
-              {promptHistory.length ? (
-                <div className="mt-4">
-                  <div className="flex items-center justify-between">
-                    <p className="flex items-center gap-1.5 text-xs font-medium uppercase tracking-wide text-slate-400"><History className="h-3.5 w-3.5" /> Prompt history</p>
-                    <button onClick={clearImagePromptHistory} className="text-xs text-slate-500 hover:text-slate-300">Clear</button>
-                  </div>
-                  <div className="mt-2 flex flex-wrap gap-2">
-                    {promptHistory.slice(0, 8).map((p, i) => (
-                      <button key={`${p}_${i}`} onClick={() => setPrompt(p)} className="max-w-[16rem] truncate rounded-full border border-white/8 bg-white/[0.03] px-3 py-1.5 text-xs text-slate-300 transition hover:bg-white/10" title={p}>{p}</button>
-                    ))}
-                  </div>
-                </div>
-              ) : null}
-
-              <button
-                onClick={() => runGenerate()}
-                disabled={studio.generating}
-                className="mt-5 flex w-full items-center justify-center gap-2 rounded-full brand-gradient px-4 py-3 text-sm font-semibold text-white shadow-[0_12px_40px_-12px_rgba(129,140,248,0.6)] transition hover:brightness-110 disabled:opacity-60"
-              >
-                <Wand2 className="h-4 w-4" /> {studio.generating ? 'Generating…' : `Generate${batchSize > 1 ? ` ${batchSize}` : ''}`}
-              </button>
-            </GlassPanel>
-
-            <GlassPanel className="p-5">
-              <div className="mb-4 flex items-center gap-2 text-sm font-semibold text-white"><Sliders className="h-4 w-4 text-indigo-300" /> Generation settings</div>
-
-              <div className="grid gap-4 sm:grid-cols-2">
-                <Field label="Provider">
-                  <select value={provider} onChange={(e) => setProvider(e.target.value)} className="w-full rounded-xl border border-white/8 bg-[#0a0c14] px-3 py-2 text-sm text-white outline-none">
-                    {studio.providers.map((p) => (
-                      <option key={p.id} value={p.id}>{p.name}{!p.implemented ? ' (placeholder)' : ''}</option>
-                    ))}
-                    {!studio.providers.length && <option value="local">InfinityAI Local Renderer</option>}
-                  </select>
-                </Field>
-                <Field label="Model">
-                  <select value={model} onChange={(e) => setModel(e.target.value)} className="w-full rounded-xl border border-white/8 bg-[#0a0c14] px-3 py-2 text-sm text-white outline-none">
-                    {modelOptions.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
-                    {!modelOptions.length && <option value="">Default</option>}
-                  </select>
-                </Field>
-              </div>
-
-              <Field label="Aspect ratio" className="mt-4">
-                <div className="flex flex-wrap gap-2">
-                  {ASPECT_RATIOS.map((r) => (
-                    <button key={r.id} onClick={() => setAspectRatio(r.id)} className={`flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs transition ${aspectRatio === r.id ? 'border-indigo-400/50 bg-indigo-500/20 text-white' : 'border-white/8 bg-white/[0.04] text-slate-300 hover:bg-white/10'}`}>
-                      <Square className="h-3 w-3" /> {r.id}
-                    </button>
-                  ))}
-                </div>
-              </Field>
-
-              <Field label="Resolution" className="mt-4">
-                <div className="flex flex-wrap gap-2">
-                  {RESOLUTIONS.map((r) => (
-                    <button key={r.id} onClick={() => setResolution(r.id)} className={`rounded-lg border px-3 py-1.5 text-xs transition ${resolution === r.id ? 'border-indigo-400/50 bg-indigo-500/20 text-white' : 'border-white/8 bg-white/[0.04] text-slate-300 hover:bg-white/10'}`}>{r.label}</button>
-                  ))}
-                  <span className="self-center text-xs text-slate-500">{dimensions.width}×{dimensions.height}</span>
-                </div>
-              </Field>
-
-              <div className="mt-4 grid gap-4 sm:grid-cols-2">
-                <Field label={`Steps · ${steps}`}>
-                  <input type="range" min="1" max="150" value={steps} onChange={(e) => setSteps(Number(e.target.value))} className="w-full accent-indigo-500" />
-                </Field>
-                <Field label={`Guidance · ${guidanceScale}`}>
-                  <input type="range" min="0" max="30" step="0.5" value={guidanceScale} onChange={(e) => setGuidanceScale(Number(e.target.value))} className="w-full accent-indigo-500" />
-                </Field>
-              </div>
-
-              <div className="mt-4 grid gap-4 sm:grid-cols-2">
-                <Field label="Seed">
-                  <div className="flex gap-2">
-                    <input value={seed} onChange={(e) => setSeed(e.target.value.replace(/[^0-9]/g, ''))} placeholder="Random" className="w-full rounded-xl border border-white/8 bg-white/[0.03] px-3 py-2 text-sm text-white outline-none" />
-                    <button onClick={() => setSeed(String(Math.floor(Math.random() * 1_000_000)))} className="grid h-9 w-9 shrink-0 place-items-center rounded-xl border border-white/8 bg-white/[0.04] text-slate-300 transition hover:bg-white/10" aria-label="Random seed"><Dice5 className="h-4 w-4" /></button>
-                  </div>
-                </Field>
-                <Field label={`Batch size · ${batchSize}`}>
-                  <input type="range" min="1" max="8" value={batchSize} onChange={(e) => setBatchSize(Number(e.target.value))} className="w-full accent-indigo-500" />
-                </Field>
-              </div>
-            </GlassPanel>
+        {/* Main 3-Panel Layout */}
+        <div className="flex-1 mt-3 grid gap-3 overflow-hidden min-h-0" style={{ gridTemplateColumns: `1fr` }}>
+          {/* Mobile table toggle */}
+          <div className="lg:hidden flex items-center gap-2 mb-2">
+            <button
+              onClick={() => setShowPromptPanel(true)}
+              className={`flex-1 rounded-full border py-2 text-xs font-medium transition ${showPromptPanel ? 'border-indigo-400/30 bg-indigo-500/10 text-indigo-200' : 'border-white/10 bg-white/[0.04] text-slate-300'}`}
+            >
+              Prompt
+            </button>
+            <button
+              onClick={() => setShowGalleryPanel(true)}
+              className={`flex-1 rounded-full border py-2 text-xs font-medium transition ${showGalleryPanel ? 'border-indigo-400/30 bg-indigo-500/10 text-indigo-200' : 'border-white/10 bg-white/[0.04] text-slate-300'}`}
+            >
+              Gallery
+            </button>
           </div>
 
-          {/* ── Right: preview + editing ───────────────────────────── */}
-          <div className="space-y-6">
-            <GlassPanel className="flex flex-col p-5">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm uppercase tracking-[0.3em] text-indigo-300">Studio preview</p>
-                  <h2 className="mt-1 text-lg font-semibold text-white">Latest render</h2>
-                </div>
-                <div className={`rounded-full border px-3 py-1 text-sm ${studio.generating ? 'border-indigo-400/20 bg-indigo-400/10 text-indigo-200' : 'border-emerald-400/20 bg-emerald-400/10 text-emerald-300'}`}>{studio.generating ? 'Working…' : 'Ready'}</div>
-              </div>
+          {/* Desktop 3-panel */}
+          <div className="hidden lg:grid h-full" style={{ gridTemplateColumns: `${showPromptPanel ? 'minmax(320px, 340px)' : '0px'} 1fr ${showGalleryPanel ? 'minmax(340px, 380px)' : '0px'}` }}>
+            <div className={`overflow-hidden transition-all duration-300 ${showPromptPanel ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
+              <PromptPanel
+                prompt={prompt}
+                setPrompt={setPrompt}
+                negativePrompt={negativePrompt}
+                setNegativePrompt={setNegativePrompt}
+                provider={provider}
+                setProvider={setProvider}
+                model={model}
+                setModel={setModel}
+                modelOptions={modelOptions}
+                aspectRatio={aspectRatio}
+                setAspectRatio={setAspectRatio}
+                resolution={resolution}
+                setResolution={setResolution}
+                steps={steps}
+                setSteps={setSteps}
+                guidanceScale={guidanceScale}
+                setGuidanceScale={setGuidanceScale}
+                seed={seed}
+                setSeed={setSeed}
+                batchSize={batchSize}
+                setBatchSize={setBatchSize}
+                style={style}
+                setStyle={setStyle}
+                generating={studio.generating}
+                onGenerate={() => runGenerate()}
+                onCancel={studio.cancel}
+                providers={studio.providers}
+                promptHistory={promptHistory}
+                onClearPromptHistory={clearImagePromptHistory}
+                onSelectPrompt={setPrompt}
+                onRandomPrompt={handleRandomPrompt}
+                dimensions={dimensions}
+                isOpen={showPromptPanel}
+              />
+            </div>
+            <div className={`overflow-hidden transition-all duration-300 ${showPromptPanel ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
+              <WorkspacePanel
+                preview={preview}
+                statusText={statusText}
+                generating={studio.generating}
+                progress={studio.progress}
+                provider={activeProvider?.name}
+                model={modelOptions.find(m => m.id === model)?.name}
+                elapsed={elapsed}
+                onCancel={studio.cancel}
+                onEdit={runEdit}
+                images={images}
+                prompt={prompt}
+                setPrompt={setPrompt}
+                onGenerate={runGenerate}
+              />
+            </div>
+            <div className={`overflow-hidden transition-all duration-300 ${showGalleryPanel ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
+              <GalleryPanel
+                images={images}
+                onAction={handleCardAction}
+                promptHistory={promptHistory}
+                collections={collections}
+                isOpen={showGalleryPanel}
+              />
+            </div>
+          </div>
 
-              <div className="mt-5 flex-1 rounded-[1.5rem] border border-white/8 bg-gradient-to-br from-indigo-500/10 via-slate-900/40 to-fuchsia-500/10 p-4">
-                <div className="flex min-h-[20rem] items-center justify-center rounded-[1rem] border border-white/10 bg-[#07101f]/70 p-3">
-                  {preview ? (
-                    <img src={preview} alt="Latest render" className="max-h-[26rem] w-auto rounded-xl object-contain" />
-                  ) : (
-                    <div className="text-center">
-                      <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-white/[0.05] text-indigo-300 ring-1 ring-white/10"><ImagePlus className="h-8 w-8" /></div>
-                      <p className="mt-4 text-base font-semibold text-white">{studio.generating ? 'Generating concept…' : 'Preview will appear here'}</p>
-                      <p className="mt-2 text-sm text-slate-400">{statusText || 'Create a concept to launch your next visual direction.'}</p>
-                    </div>
-                  )}
-                </div>
-              </div>
-            </GlassPanel>
-
-            <GlassPanel className="p-5">
-              <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-white"><Layers className="h-4 w-4 text-indigo-300" /> AI editing</div>
-              <p className="text-xs text-slate-400">Applies to your most recent image{images[0] ? '' : ' (generate one first)'}.</p>
-              <div className="mt-3 grid gap-2 sm:grid-cols-2">
-                {EDIT_OPERATIONS.map((op) => (
-                  <button
-                    key={op.id}
-                    onClick={() => images[0] && runEdit(op.id, images[0])}
-                    disabled={!images[0] || studio.generating}
-                    className="flex flex-col items-start rounded-xl border border-white/8 bg-white/[0.03] p-3 text-left transition hover:bg-white/[0.07] disabled:cursor-not-allowed disabled:opacity-50"
-                  >
-                    <span className="text-sm font-medium text-white">{op.label}</span>
-                    <span className="mt-0.5 text-xs text-slate-400">{op.description}</span>
-                  </button>
-                ))}
-              </div>
-            </GlassPanel>
+          {/* Mobile stacked layout */}
+          <div className="lg:hidden flex-1 overflow-y-auto custom-scrollbar space-y-4">
+            {showPromptPanel && (
+              <PromptPanel
+                prompt={prompt}
+                setPrompt={setPrompt}
+                negativePrompt={negativePrompt}
+                setNegativePrompt={setNegativePrompt}
+                provider={provider}
+                setProvider={setProvider}
+                model={model}
+                setModel={setModel}
+                modelOptions={modelOptions}
+                aspectRatio={aspectRatio}
+                setAspectRatio={setAspectRatio}
+                resolution={resolution}
+                setResolution={setResolution}
+                steps={steps}
+                setSteps={setSteps}
+                guidanceScale={guidanceScale}
+                setGuidanceScale={setGuidanceScale}
+                seed={seed}
+                setSeed={setSeed}
+                batchSize={batchSize}
+                setBatchSize={setBatchSize}
+                style={style}
+                setStyle={setStyle}
+                generating={studio.generating}
+                onGenerate={() => runGenerate()}
+                onCancel={studio.cancel}
+                providers={studio.providers}
+                promptHistory={promptHistory}
+                onClearPromptHistory={clearImagePromptHistory}
+                onSelectPrompt={setPrompt}
+                onRandomPrompt={handleRandomPrompt}
+                dimensions={dimensions}
+                isOpen={true}
+              />
+            )}
+            {showGalleryPanel && (
+              <GalleryPanel
+                images={images}
+                onAction={handleCardAction}
+                promptHistory={promptHistory}
+                collections={collections}
+                isOpen={true}
+              />
+            )}
           </div>
         </div>
-
-        {/* ── Gallery ──────────────────────────────────────────────── */}
-        <GlassPanel className="mt-6 p-5">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div className="flex items-center gap-2">
-              <GalleryHorizontalEnd className="h-5 w-5 text-indigo-300" />
-              <h3 className="text-lg font-semibold text-white">Gallery</h3>
-              <span className="rounded-full bg-white/10 px-2 py-0.5 text-xs text-slate-300">{filtered.length}</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <div className="flex items-center gap-2 rounded-full border border-white/8 bg-white/[0.04] px-3 py-2 text-sm text-slate-300 transition focus-within:border-indigo-400/40">
-                <Search className="h-4 w-4 shrink-0" />
-                <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search prompts or tags" className="w-40 bg-transparent text-sm text-white outline-none placeholder:text-slate-500 sm:w-52" />
-              </div>
-              <button onClick={handleNewCollection} className="flex items-center gap-1.5 rounded-full border border-white/8 bg-white/[0.04] px-3 py-2 text-xs text-slate-300 transition hover:bg-white/10"><Folder className="h-3.5 w-3.5" /> New collection</button>
-            </div>
-          </div>
-
-          <div className="mt-4 flex flex-wrap gap-2">
-            <FilterChip active={filter === 'all'} onClick={() => setFilter('all')}>All</FilterChip>
-            <FilterChip active={filter === 'favorites'} onClick={() => setFilter('favorites')}><Star className="h-3.5 w-3.5" /> Favorites</FilterChip>
-            {collections.map((c) => (
-              <FilterChip key={c.id} active={filter === c.id} onClick={() => setFilter(c.id)}><Folder className="h-3.5 w-3.5" /> {c.name}</FilterChip>
-            ))}
-          </div>
-
-          <div className="mt-5">
-            {visible.length ? (
-              <div className="columns-1 gap-4 sm:columns-2 lg:columns-3 xl:columns-4">
-                {visible.map((entry) => (
-                  <ImageCard key={entry.id} entry={entry} onAction={handleCardAction} searchQuery={query} />
-                ))}
-              </div>
-            ) : images.length ? (
-              <EmptyState icon={Search} title="No matches found" description="Try a different keyword, tag, or filter." />
-            ) : (
-              <EmptyState icon={ImagePlus} title="No images yet" description="Generate your first concept above and it will appear here." />
-            )}
-            <div ref={sentinelRef} className="h-8" />
-            {visibleCount < filtered.length && <p className="py-4 text-center text-sm text-slate-500">Loading more…</p>}
-          </div>
-        </GlassPanel>
       </div>
 
-      {/* ── Collection picker modal ───────────────────────────────── */}
+      {/* Collection picker modal */}
       <AnimatePresence>
         {editTarget?.mode === 'collection' && (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[90] grid place-items-center bg-black/60 p-4" onClick={() => setEditTarget(null)}>
-            <motion.div initial={{ scale: 0.95, y: 10 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.95, y: 10 }} className="glass w-full max-w-sm rounded-2xl p-5" onClick={(e) => e.stopPropagation()}>
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[90] grid place-items-center bg-black/60 p-4"
+            onClick={() => setEditTarget(null)}
+          >
+            <motion.div
+              initial={{ scale: 0.95, y: 10 }}
+              animate={{ scale: 1, y: 0 }}
+              exit={{ scale: 0.95, y: 10 }}
+              className="glass w-full max-w-sm rounded-2xl p-5"
+              onClick={(e) => e.stopPropagation()}
+            >
               <div className="flex items-center justify-between">
                 <h4 className="text-base font-semibold text-white">Add to collection</h4>
-                <button onClick={() => setEditTarget(null)} className="grid h-8 w-8 place-items-center rounded-full border border-white/10 text-slate-300 hover:bg-white/10"><X className="h-4 w-4" /></button>
+                <button onClick={() => setEditTarget(null)} className="grid h-8 w-8 place-items-center rounded-full border border-white/10 text-slate-300 transition hover:bg-white/10 hover:scale-110 active:scale-90">
+                  <X className="h-4 w-4" />
+                </button>
               </div>
               <div className="mt-4 space-y-2">
                 {collections.length ? collections.map((c) => (
-                  <button key={c.id} onClick={() => { assignImageCollection(editTarget.entry.id, c.id); setEditTarget(null); addToast({ kind: 'success', title: 'Added', message: `Added to ${c.name}.` }) }} className="flex w-full items-center gap-2 rounded-xl border border-white/8 bg-white/[0.03] px-3 py-2.5 text-left text-sm text-white transition hover:bg-white/[0.07]">
+                  <button
+                    key={c.id}
+                    onClick={() => { assignImageCollection(editTarget.entry.id, c.id); setEditTarget(null); addToast({ kind: 'success', title: 'Added', message: `Added to ${c.name}.` }) }}
+                    className="flex w-full items-center gap-2 rounded-xl border border-white/8 bg-white/[0.03] px-3 py-2.5 text-left text-sm text-white transition hover:bg-white/[0.07] hover:border-white/15 hover:shadow-lg hover:shadow-black/10 active:scale-[0.98]"
+                  >
                     <Folder className="h-4 w-4 text-indigo-300" /> {c.name}
                   </button>
                 )) : <p className="text-sm text-slate-400">No collections yet.</p>}
-                <button onClick={handleNewCollection} className="flex w-full items-center gap-2 rounded-xl border border-dashed border-white/15 px-3 py-2.5 text-left text-sm text-slate-300 transition hover:bg-white/[0.04]"><Folder className="h-4 w-4" /> Create new collection</button>
+                <button onClick={handleNewCollection} className="flex w-full items-center gap-2 rounded-xl border border-dashed border-white/15 px-3 py-2.5 text-left text-sm text-slate-300 transition hover:bg-white/[0.04] hover:border-white/30 active:scale-[0.98]">
+                  <Folder className="h-4 w-4" /> Create new collection
+                </button>
               </div>
             </motion.div>
           </motion.div>
         )}
       </AnimatePresence>
     </div>
-  )
-}
-
-function Field({ label, children, className = '' }) {
-  return (
-    <div className={className}>
-      <label className="mb-1.5 block text-xs font-medium uppercase tracking-wide text-slate-400">{label}</label>
-      {children}
-    </div>
-  )
-}
-
-function FilterChip({ children, active, onClick }) {
-  return (
-    <button onClick={onClick} className={`flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs transition ${active ? 'border-indigo-400/50 bg-indigo-500/20 text-white' : 'border-white/8 bg-white/[0.04] text-slate-300 hover:bg-white/10'}`}>{children}</button>
   )
 }

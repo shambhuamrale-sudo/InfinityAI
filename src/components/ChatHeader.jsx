@@ -1,6 +1,6 @@
 import { motion, AnimatePresence } from 'framer-motion'
 import { Search, Download, Sparkles, MessageSquareText, Cloud, Cpu } from 'lucide-react'
-import { useRef, useEffect, useState } from 'react'
+import { useRef, useEffect, useState, useCallback } from 'react'
 import ModelSelector from './ModelSelector'
 import ProviderSelector from './ProviderSelector'
 import { useAppContext } from '../context/useAppContext'
@@ -34,11 +34,11 @@ export default function ChatHeader({
     return () => document.removeEventListener('mousedown', handler)
   }, [])
 
-  const handleModeChange = async (mode) => {
+  const handleModeChange = useCallback(async (mode) => {
     await setAIMode(mode)
     setLocalMenuOpen(false)
     setTimeout(fetchAIModeStatus, 500)
-  }
+  }, [setAIMode, fetchAIModeStatus])
 
   const isLocal = aiMode?.mode === 'local'
   const localAvailable = aiMode?.localAvailable
@@ -48,42 +48,44 @@ export default function ChatHeader({
     <motion.header
       initial={{ opacity: 0, y: -10 }}
       animate={{ opacity: 1, y: 0 }}
-      className="glass mb-6 flex items-center justify-between gap-4 rounded-[1.75rem] px-5 py-4"
+      className="mb-6 flex items-center justify-between gap-4 rounded-[1.75rem] border border-white/[0.08] bg-white/[0.04] px-5 py-4 shadow-[0_1px_0_0_rgba(255,255,255,0.04)_inset,0_24px_70px_-30px_rgba(0,0,0,0.6)] backdrop-blur-2xl transition-all duration-200"
     >
       <div className="flex items-center gap-3">
         <button
           onClick={onToggleSidebar}
-          className="grid h-10 w-10 place-items-center rounded-2xl bg-white/[0.05] text-slate-300 ring-1 ring-white/10 transition hover:bg-white/10 lg:hidden"
+          className="grid h-10 w-10 place-items-center rounded-2xl bg-white/[0.04] text-slate-300 ring-1 ring-white/10 transition-all duration-200 hover:bg-white/10 hover:text-white hover:scale-105 active:scale-95 lg:hidden"
           aria-label="Toggle sidebar"
+          tabIndex={0}
         >
           <MessageSquareText className="h-5 w-5" />
         </button>
-        <div className="hidden sm:grid h-11 w-11 place-items-center rounded-2xl bg-white/[0.05] text-indigo-300 ring-1 ring-white/10">
+        <div className="hidden sm:grid h-11 w-11 place-items-center rounded-2xl bg-white/[0.04] text-indigo-300 ring-1 ring-white/10">
           <MessageSquareText className="h-5 w-5" />
         </div>
-        <div>
-          <p className="text-xs uppercase tracking-[0.3em] text-indigo-300">AI Chat</p>
-          <h1 className="text-lg font-semibold tracking-tight text-white">
+        <div className="min-w-0">
+          <p className="text-xs uppercase tracking-[0.3em] text-indigo-300 font-semibold">AI Chat</p>
+          <h1 className="text-lg font-semibold tracking-tight text-white truncate max-w-[200px] sm:max-w-none">
             {activeConversation?.title || 'Ask anything. Get a premium response.'}
           </h1>
         </div>
       </div>
 
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-2 overflow-x-auto hide-scrollbar">
         <div className="relative" ref={localMenuRef}>
           <button
             type="button"
             onClick={() => setLocalMenuOpen((v) => !v)}
-            className={`flex items-center gap-2 rounded-2xl border px-3 py-2 text-sm transition ${
+            className={`flex items-center gap-2 rounded-2xl border px-3 py-2 text-sm transition-all duration-200 ${
               isLocal ? 'border-emerald-400/30 bg-emerald-400/10 text-emerald-200' : 'border-white/8 bg-white/[0.04] text-white hover:bg-white/[0.07]'
             }`}
             aria-haspopup="listbox"
             aria-expanded={localMenuOpen}
+            tabIndex={0}
           >
             {isLocal ? <Cpu className="h-4 w-4" /> : <Cloud className="h-4 w-4" />}
             <span className="min-w-0 flex-1 truncate text-left font-medium">{isLocal ? 'Local AI' : 'Cloud AI'}</span>
-            {isLocal && localAvailable && <span className="h-2 w-2 rounded-full bg-emerald-400" />}
-            {isLocal && !localAvailable && <span className="h-2 w-2 rounded-full bg-amber-400" />}
+            {isLocal && localAvailable && <span className="h-2 w-2 rounded-full bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.5)]" />}
+            {isLocal && !localAvailable && <span className="h-2 w-2 rounded-full bg-amber-400 shadow-[0_0_8px_rgba(251,191,36,0.5)]" />}
           </button>
           <AnimatePresence>
             {localMenuOpen && (
@@ -143,7 +145,7 @@ export default function ChatHeader({
           whileHover={{ scale: 1.03, y: -1 }}
           whileTap={{ scale: 0.97 }}
           onClick={onNewChat}
-          className="flex items-center gap-2 rounded-full brand-gradient px-4 py-2.5 text-sm font-semibold text-white shadow-[0_12px_40px_-12px_rgba(129,140,248,0.6)] transition hover:brightness-110"
+          className="flex items-center gap-2 rounded-full brand-gradient px-4 py-2.5 text-sm font-semibold text-white shadow-[0_12px_40px_-12px_rgba(129,140,248,0.6)] transition-all duration-200 hover:brightness-110 hover:shadow-[0_16px_48px_-12px_rgba(129,140,248,0.7)] active:scale-95"
         >
           <Sparkles className="h-4 w-4" />
           <span className="hidden sm:inline">New Chat</span>
@@ -151,8 +153,9 @@ export default function ChatHeader({
 
         <button
           onClick={onToggleSearch}
-          className={`grid h-10 w-10 place-items-center rounded-2xl border border-white/10 bg-white/[0.04] text-slate-300 transition hover:bg-white/10 ${showSearch ? 'border-indigo-400/30 text-indigo-300' : ''}`}
+          className={`grid h-10 w-10 shrink-0 place-items-center rounded-2xl border border-white/10 bg-white/[0.04] text-slate-300 transition-all duration-200 hover:bg-white/10 hover:scale-105 active:scale-95 ${showSearch ? 'border-indigo-400/30 text-indigo-300' : ''}`}
           aria-label="Search"
+          tabIndex={0}
         >
           <Search className="h-4 w-4" />
         </button>
@@ -160,34 +163,40 @@ export default function ChatHeader({
         <div className="relative" ref={exportRef}>
           <button
             onClick={() => setShowExportMenu(!showExportMenu)}
-            className="grid h-10 w-10 place-items-center rounded-2xl border border-white/10 bg-white/[0.04] text-slate-300 transition hover:bg-white/10"
+            className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl border border-white/10 bg-white/[0.04] text-slate-300 transition-all duration-200 hover:bg-white/10 hover:scale-105 active:scale-95"
             aria-label="Export"
+            tabIndex={0}
           >
             <Download className="h-4 w-4" />
           </button>
-          {showExportMenu && (
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95, y: -4 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              className="absolute right-0 top-12 z-50 w-40 rounded-xl border border-white/10 bg-[#0a0c14]/95 p-1 shadow-2xl backdrop-blur-xl"
-            >
-              <button onClick={() => { onExport('md'); setShowExportMenu(false) }} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-slate-300 transition hover:bg-white/10 hover:text-white">
-                Markdown
-              </button>
-              <button onClick={() => { onExport('html'); setShowExportMenu(false) }} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-slate-300 transition hover:bg-white/10 hover:text-white">
-                HTML
-              </button>
-              <button onClick={() => { onExport('pdf'); setShowExportMenu(false) }} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-slate-300 transition hover:bg-white/10 hover:text-white">
-                PDF
-              </button>
-            </motion.div>
-          )}
+          <AnimatePresence>
+            {showExportMenu && (
+              <motion.div
+                initial={{ opacity: 0, scale: 0.95, y: -4 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.95, y: -4 }}
+                transition={{ duration: 0.15 }}
+                className="absolute right-0 top-12 z-50 w-40 rounded-xl border border-white/10 bg-[#0a0c14]/95 p-1 shadow-2xl backdrop-blur-xl"
+              >
+                <button onClick={() => { onExport('md'); setShowExportMenu(false) }} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-slate-300 transition hover:bg-white/10 hover:text-white" role="menuitem">
+                  Markdown
+                </button>
+                <button onClick={() => { onExport('html'); setShowExportMenu(false) }} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-slate-300 transition hover:bg-white/10 hover:text-white" role="menuitem">
+                  HTML
+                </button>
+                <button onClick={() => { onExport('pdf'); setShowExportMenu(false) }} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-slate-300 transition hover:bg-white/10 hover:text-white" role="menuitem">
+                  PDF
+                </button>
+              </motion.div>
+            )}
+          </AnimatePresence>
         </div>
 
         <button
           onClick={onToggleFavorite}
-          className={`grid h-10 w-10 place-items-center rounded-2xl border border-white/10 bg-white/[0.04] transition hover:bg-white/10 ${isFavorite ? 'border-amber-400/30 text-amber-300' : 'text-slate-300'}`}
+          className={`grid h-10 w-10 shrink-0 place-items-center rounded-2xl border border-white/10 bg-white/[0.04] transition-all duration-200 hover:bg-white/10 hover:scale-105 active:scale-95 ${isFavorite ? 'border-amber-400/30 text-amber-300' : 'text-slate-300'}`}
           aria-label="Favorite"
+          tabIndex={0}
         >
           <Sparkles className="h-4 w-4" />
         </button>

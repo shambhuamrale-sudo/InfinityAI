@@ -1,5 +1,5 @@
 import { motion } from 'framer-motion'
-import { Search, RadioTower, MoonStar, SunMedium, Bell, Sparkles } from 'lucide-react'
+import { Search, RadioTower, MoonStar, SunMedium, Bell, Sparkles, Cloud, Monitor } from 'lucide-react'
 import { useAppContext } from '../../context/useAppContext'
 
 export default function DashboardTopbar({ title, subtitle, isDark }) {
@@ -35,6 +35,18 @@ export default function DashboardTopbar({ title, subtitle, isDark }) {
           <span className="capitalize">{provider}</span>
           <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 shadow-[0_0_10px_rgba(52,211,153,0.8)]" />
         </div>
+
+        {preferences?.defaultAIMode === 'local' ? (
+          <div className="hidden items-center gap-2 rounded-full border border-emerald-400/20 bg-emerald-400/10 px-3 py-2 text-sm font-medium text-emerald-200 lg:flex">
+            <Monitor className="h-4 w-4 text-emerald-300" />
+            <span>Local AI</span>
+          </div>
+        ) : (
+          <div className="hidden items-center gap-2 rounded-full border border-indigo-400/20 bg-indigo-400/10 px-3 py-2 text-sm font-medium text-indigo-200 lg:flex">
+            <Cloud className="h-4 w-4 text-indigo-300" />
+            <span>Cloud AI</span>
+          </div>
+        )}
 
         <button
           onClick={() => updatePreferences({ darkMode: !preferences?.darkMode })}
