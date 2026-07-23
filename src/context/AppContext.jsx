@@ -29,6 +29,7 @@ export function AppProvider({ children }) {
   const [state, setState] = useState(createDefaultState)
   const [hydrated, setHydrated] = useState(false)
   const [auth, setAuth] = useState({ user: null, isAuthenticated: false, loading: true })
+  const [aiMode, setAiMode] = useState({ mode: 'cloud', localAvailable: false, localChatProvider: null, localImageAvailable: false, localImageProvider: null, cloudStatus: 'unknown', localStatus: 'stopped', loading: true })
 
   useEffect(() => {
     const hydrateAuth = async () => {
@@ -41,9 +42,6 @@ export function AppProvider({ children }) {
         } else if (response.status === 401) {
           setAuth({ user: null, isAuthenticated: false, loading: false })
         } else {
-          // Transient failures (429 rate-limit, 5xx, network) must NOT log the
-          // user out. Keep them on the page; the guard treats loading=false +
-          // isAuthenticated=false as a redirect only for genuine 401s.
           setAuth((prev) => ({ ...prev, loading: false }))
         }
       } catch {
@@ -66,10 +64,11 @@ export function AppProvider({ children }) {
 
       try {
         const apiBase = API_BASE
-        const [plansRes, configRes, serverStateRes] = await Promise.all([
+        const [plansRes, configRes, serverStateRes, aiModeRes] = await Promise.all([
           fetch(`${apiBase}/plans`, { credentials: 'include' }),
           fetch(`${apiBase}/config`, { credentials: 'include' }),
-          fetch(`${apiBase}/state`, { credentials: 'include' })
+          fetch(`${apiBase}/state`, { credentials: 'include' }),
+          fetch(`${apiBase}/ai-mode`, { credentials: 'include' }).catch(() => null)
         ])
         if (plansRes.ok) {
           const plans = await plansRes.json()
@@ -83,8 +82,15 @@ export function AppProvider({ children }) {
           const serverState = await serverStateRes.json()
           setState((prev) => normalizeState({ ...prev, ...serverState, user: { ...prev.user, ...(serverState.user || {}) }, subscription: { ...prev.subscription, ...(serverState.subscription || {}) }, usage: { ...prev.usage, ...(serverState.usage || {}) }, adminConfig: { ...prev.adminConfig, ...(serverState.adminConfig || {}), planLimits: { ...prev.adminConfig.planLimits, ...(serverState.adminConfig?.planLimits || {}) }, providerConfig: { ...prev.adminConfig.providerConfig, ...(serverState.adminConfig?.providerConfig || {}) } }, preferences: { ...prev.preferences, ...(serverState.preferences || {}) }, ui: { ...prev.ui, ...(serverState.ui || {}) } }))
         }
+        if (aiModeRes?.ok) {
+          const aiModeData = await aiModeRes.json()
+          setAiMode((prev) => ({ ...prev, ...aiModeData, loading: false }))
+        } else {
+          setAiMode((prev) => ({ ...prev, loading: false }))
+        }
       } catch (error) {
         console.warn('Using cached app state', error)
+        setAiMode((prev) => ({ ...prev, loading: false }))
       }
 
       setHydrated(true)
@@ -174,6 +180,44 @@ export function AppProvider({ children }) {
   const dismissToast = (id) => {
     setState((prev) => ({ ...prev, toasts: prev.toasts.filter((toast) => toast.id !== id) }))
   }
+
+  const fetchAIModeStatus = async () => {
+    try {
+      const res = await fetch(`${API_BASE}/ai-status`, { credentials: 'include' })
+      if (res.ok) {
+        const data = await res.json()
+        setAiMode((prev) => ({ ...prev, ...data }))
+      }
+    } catch {
+      // ignore transient failures
+    }
+  }
+
+  const setAIMode = async (mode) => {
+    try {
+      const res = await fetch(`${API_BASE}/ai-mode`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ mode }),
+        credentials: 'include'
+      })
+      if (res.ok) {
+        const data = await res.json()
+        setAiMode((prev) => ({ ...prev, mode: data.mode || mode }))
+        setState((prev) => ({ ...prev, preferences: { ...prev.preferences, defaultAIMode: data.mode || mode } }))
+        addToast({ kind: 'success', title: 'AI mode updated', message: `Switched to ${mode === 'local' ? 'Local AI' : 'Cloud AI'}.` })
+      }
+    } catch {
+      addToast({ kind: 'error', title: 'Update failed', message: 'Could not update AI mode.' })
+    }
+  }
+
+  useEffect(() => {
+    if (!hydrated) return
+    fetchAIModeStatus()
+    const timer = setInterval(fetchAIModeStatus, 15000)
+    return () => clearInterval(timer)
+  }, [hydrated])
 
   const canUseTool = (tool = 'chat') => {
     const plan = state.subscription.plan || 'free-trial'
@@ -549,6 +593,7 @@ export function AppProvider({ children }) {
   const value = useMemo(() => ({
     ...state,
     auth,
+    aiMode,
     login,
     signup,
     logout,
@@ -581,6 +626,8 @@ export function AppProvider({ children }) {
     setDarkMode,
     addToast,
     dismissToast,
+    setAIMode,
+    fetchAIModeStatus,
     setCommandPaletteOpen: (value) => setState((prev) => ({ ...prev, ui: { ...prev.ui, commandPaletteOpen: value } })),
     setNotificationsOpen: (value) => setState((prev) => ({ ...prev, ui: { ...prev.ui, notificationsOpen: value } })),
     setUpgradeModalOpen: (value) => setState((prev) => ({ ...prev, ui: { ...prev.ui, upgradeModalOpen: value } }))

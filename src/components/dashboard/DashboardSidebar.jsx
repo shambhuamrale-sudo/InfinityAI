@@ -2,7 +2,7 @@ import { motion } from 'framer-motion'
 import { useNavigate, useLocation } from 'react-router-dom'
 import {
   LayoutGrid, MessageSquareText, ImagePlus, Sparkles, Code2, FileText, Languages,
-  History, GalleryHorizontalEnd, Bookmark, Crown, Bell, Settings, ShieldCheck, PanelLeftClose, PanelLeftOpen
+  History, GalleryHorizontalEnd, Bookmark, Crown, Bell, Settings, ShieldCheck, PanelLeftClose, PanelLeftOpen, Cpu
 } from 'lucide-react'
 import { useAppContext } from '../../context/useAppContext'
 import InfinityLogo from '../InfinityLogo'
@@ -11,6 +11,7 @@ const NAV = [
   { label: 'Dashboard', icon: LayoutGrid, route: '/dashboard' },
   { label: 'AI Chat', icon: MessageSquareText, route: '/chat' },
   { label: 'AI Image', icon: ImagePlus, route: '/image' },
+  { label: 'Local AI', icon: Cpu, route: '/local-ai' },
   { label: 'AI Writer', icon: Sparkles, route: '/writer' },
   { label: 'AI Code', icon: Code2, route: '/code' },
   { label: 'PDF AI', icon: FileText, route: '/pdf' },

@@ -1,5 +1,5 @@
 import { motion } from 'framer-motion'
-import { BellRing, BrushCleaning, KeyRound, ShieldCheck, Sparkles } from 'lucide-react'
+import { BellRing, BrushCleaning, KeyRound, ShieldCheck, Sparkles, Cpu, Cloud } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import BackgroundEffects from '../components/BackgroundEffects'
 import GlassPanel from '../components/GlassPanel'
@@ -60,6 +60,42 @@ export default function SettingsPage() {
                 </motion.div>
               )
             })}
+
+            <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}>
+              <GlassPanel className="p-5">
+                <div className="flex items-center gap-3">
+                  <div className="grid h-10 w-10 place-items-center rounded-2xl bg-white/[0.05] text-indigo-300 ring-1 ring-white/10">
+                    {localPrefs.defaultAIMode === 'local' ? <Cpu className="h-4 w-4" /> : <Cloud className="h-4 w-4" />}
+                  </div>
+                  <div className="flex-1">
+                    <p className="font-semibold text-white">Default AI Mode</p>
+                    <p className="text-sm text-slate-400">Choose Cloud or Local as your default AI provider.</p>
+                  </div>
+                </div>
+                <div className="mt-4 flex gap-2">
+                  <button
+                    onClick={() => updatePreferences({ defaultAIMode: 'cloud' })}
+                    className={`flex-1 rounded-2xl border px-4 py-2.5 text-sm font-semibold transition ${
+                      localPrefs.defaultAIMode === 'cloud'
+                        ? 'border-indigo-400/50 bg-indigo-500/20 text-white'
+                        : 'border-white/8 bg-white/[0.04] text-slate-300 hover:bg-white/10'
+                    }`}
+                  >
+                    <Cloud className="mr-2 inline h-4 w-4" /> Cloud
+                  </button>
+                  <button
+                    onClick={() => updatePreferences({ defaultAIMode: 'local' })}
+                    className={`flex-1 rounded-2xl border px-4 py-2.5 text-sm font-semibold transition ${
+                      localPrefs.defaultAIMode === 'local'
+                        ? 'border-emerald-400/50 bg-emerald-500/20 text-white'
+                        : 'border-white/8 bg-white/[0.04] text-slate-300 hover:bg-white/10'
+                    }`}
+                  >
+                    <Cpu className="mr-2 inline h-4 w-4" /> Local
+                  </button>
+                </div>
+              </GlassPanel>
+            </motion.div>
           </div>
 
           <GlassPanel className="p-6">

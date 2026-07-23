@@ -178,7 +178,7 @@ export function useChat() {
   const sendMessage = async (content, options = {}) => {
     if (!content.trim() && attachments.length === 0) return
     setError(null)
-    const userMessage = { role: 'user', content: content.trim(), timestamp: new Date().toISOString(), attachments: Array.isArray(attachments) ? attachments.map((a) => ({ name: a.name, type: a.type, size: a.size })) : [] }
+    const userMessage = { role: 'user', content: content.trim(), timestamp: new Date().toISOString(), attachments: Array.isArray(attachments) ? attachments.map((a) => ({ name: a.name, type: a.type, size: a.size })) : [], provider: options.provider, model: options.model, aiMode: options.aiMode }
     const assistantPlaceholder = { role: 'assistant', content: '', timestamp: new Date().toISOString(), status: 'streaming' }
     setMessages((prev) => [...prev, userMessage, assistantPlaceholder])
     setAttachments([])
@@ -186,7 +186,6 @@ export function useChat() {
     setStreamingText('')
     setStreamingStatus('streaming')
 
-    // Cancel any still-pending generation before starting a new one.
     controllerRef.current?.abort()
 
     const abort = new AbortController()
@@ -215,7 +214,8 @@ export function useChat() {
             provider: options.provider,
             model: options.model,
             messages: currentMessages.map((m) => ({ role: m.role, content: m.content })),
-            stream: true
+            stream: true,
+            aiMode: options.aiMode
           }),
           credentials: 'include',
           signal: abort.signal
@@ -285,7 +285,7 @@ export function useChat() {
         setStreamingText('')
         setMessages((prev) => {
           const next = [...prev]
-          next[next.length - 1] = { ...next[next.length - 1], content: text, status: 'complete' }
+          next[next.length - 1] = { ...next[next.length - 1], content: fullText, status: 'complete' }
           return next
         })
       } else {
@@ -296,7 +296,8 @@ export function useChat() {
             prompt: content.trim(),
             provider: options.provider,
             model: options.model,
-            messages: currentMessages.map((m) => ({ role: m.role, content: m.content }))
+            messages: currentMessages.map((m) => ({ role: m.role, content: m.content })),
+            aiMode: options.aiMode
           }),
           credentials: 'include',
           signal: abort.signal
@@ -371,7 +372,7 @@ export function useChat() {
     if (!userMsg || userMsg.role !== 'user') return
     const newMessages = current.slice(0, index)
     setMessages(newMessages)
-    await sendMessage(userMsg.content, { provider: userMsg.provider, model: userMsg.model })
+    await sendMessage(userMsg.content, { provider: userMsg.provider, model: userMsg.model, aiMode: userMsg.aiMode })
   }
 
   const regenerateResponse = async (index) => {
@@ -380,17 +381,18 @@ export function useChat() {
     if (!userMsg || userMsg.role !== 'user') return
     const newMessages = current.slice(0, index)
     setMessages(newMessages)
-    await sendMessage(userMsg.content, { provider: userMsg.provider, model: userMsg.model })
+    await sendMessage(userMsg.content, { provider: userMsg.provider, model: userMsg.model, aiMode: userMsg.aiMode })
   }
 
   const editMessage = async (index, newContent) => {
     const newMessages = messagesRef.current.map((m, i) => (i === index ? { ...m, content: newContent } : m))
     setMessages(newMessages)
-    const userMsg = newMessages[index]
+    const userMsg = messagesRef.current[index]
     const following = newMessages.slice(index + 1)
     const trimmed = following.filter((m) => m.role !== 'assistant' || m.status !== 'streaming')
     setMessages([...newMessages.slice(0, index + 1), ...trimmed])
-    await sendMessage(newContent, { provider: userMsg.provider, model: userMsg.model })
+    if (!userMsg || userMsg.role !== 'user') return
+    await sendMessage(newContent, { provider: userMsg.provider, model: userMsg.model, aiMode: userMsg.aiMode })
   }
 
   const uploadAttachment = async (file) => {

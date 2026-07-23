@@ -13,7 +13,7 @@ import { JuggernautXLProvider } from './JuggernautXLProvider.js'
 import { DreamShaperXLProvider } from './DreamShaperXLProvider.js'
 import { RealisticVisionProvider } from './RealisticVisionProvider.js'
 import { PlaygroundV2Provider } from './PlaygroundV2Provider.js'
-import { renderPlaceholderImage, buildRandomPrompt } from './imageUtils.js'
+import { buildRandomPrompt } from './imageUtils.js'
 
 /**
  * ImageProviderManager
@@ -22,15 +22,8 @@ import { renderPlaceholderImage, buildRandomPrompt } from './imageUtils.js'
  * chat {@link ProviderManager}: routes talk only to the manager, and adding a
  * provider means registering it here — nothing else changes.
  *
- * The default provider is the always-available local renderer, so the Image
- * Studio works immediately in any environment. Local self-hosted providers
- * (ComfyUI, Automatic1111, Ollama-compatible) perform real calls when
- * reachable; cloud providers perform real calls when their API keys are present
- * and gracefully fall back to the local renderer otherwise.
- *
- * A fallback chain lets a generation attempt the requested cloud provider and,
- * on any failure, transparently retry with the next configured provider before
- * finally rendering a local preview.
+ * The manager supports AI mode routing (cloud / local) so that image generation
+ * respects the user's global preference without silently falling back.
  */
 export class ImageProviderManager {
   constructor() {
@@ -43,6 +36,10 @@ export class ImageProviderManager {
      * @type {string[]}
      */
     this.fallbackChain = ['replicate', 'stability', 'openai-image', 'huggingface', 'flux', 'sdxl', 'sd35', 'juggernaut-xl', 'dreamshaper-xl', 'realistic-vision', 'playground-v2']
+  }
+
+  static get LOCAL_PROVIDER_ORDER() {
+    return ['comfyui', 'automatic1111', 'localllama']
   }
 
   register(provider) {
@@ -62,10 +59,40 @@ export class ImageProviderManager {
     return [...this.providers.values()]
   }
 
-  /** Resolve the provider to use; falls back to the local renderer. */
+  /** Resolve the provider to use; falls back to the default local renderer. */
   select(requestedId) {
     if (requestedId && this.has(requestedId)) return this.get(requestedId)
     return this.get(this.defaultProviderId)
+  }
+
+  /**
+   * Select the first available provider matching the requested AI mode.
+   * For 'local': tries ComfyUI then Automatic1111.
+   * For 'cloud': tries OpenRouter then Replicate then Stability.
+   * Returns undefined when no provider in that mode is available.
+   * @param {'cloud' | 'local'} mode
+   */
+  async selectForMode(mode) {
+    if (mode === 'local') {
+      for (const id of ImageProviderManager.LOCAL_PROVIDER_ORDER) {
+        const provider = this.get(id)
+        if (provider && await provider.isAvailable().catch(() => false)) {
+          return provider
+        }
+      }
+      const localFallback = this.get('local')
+      if (localFallback && await localFallback.isAvailable().catch(() => false)) {
+        return localFallback
+      }
+      return undefined
+    }
+    for (const id of ['openrouter', 'replicate', 'stability']) {
+      const provider = this.get(id)
+      if (provider && await provider.isAvailable().catch(() => false)) {
+        return provider
+      }
+    }
+    return undefined
   }
 
   describeProvider(provider) {
@@ -113,6 +140,16 @@ export class ImageProviderManager {
     return results
   }
 
+  async checkLocalAvailability() {
+    for (const id of ImageProviderManager.LOCAL_PROVIDER_ORDER) {
+      const provider = this.get(id)
+      if (provider && await provider.isAvailable().catch(() => false)) {
+        return { available: true, providerId: id }
+      }
+    }
+    return { available: false, providerId: null }
+  }
+
   async validateApiKey(id, apiKey) {
     const provider = this.get(id)
     if (!provider) return { id, valid: false, reason: 'unknown-provider' }
@@ -155,36 +192,57 @@ export class ImageProviderManager {
   }
 
   /**
-   * Text-to-image generation via the selected provider. Returns the result
-   * on success, or throws the provider error on failure. No silent fallback
-   * to local placeholders.
+   * Text-to-image generation via the selected provider. When `aiMode` is
+   * supplied, it overrides the explicit `provider` to enforce the chosen mode.
+   * Returns the result on success, or throws the provider error on failure.
+   * No silent fallback to local placeholders.
    */
-  async generate({ provider: providerId, ...params } = {}) {
-    const primary = this.select(providerId)
-    if (!primary) {
-      throw new Error('No image provider available.')
+  async generate({ provider: providerId, aiMode, ...params } = {}) {
+    let primary
+    if (aiMode === 'local') {
+      primary = await this.selectForMode('local')
+    } else if (aiMode === 'cloud') {
+      primary = await this.selectForMode('cloud')
+    } else {
+      primary = this.select(providerId)
     }
+
+    if (!primary) {
+      const modeLabel = aiMode === 'local' ? 'Local' : aiMode === 'cloud' ? 'Cloud' : 'Requested'
+      throw new Error(`${modeLabel} AI image generation is unavailable.`)
+    }
+
     try {
       return await primary.generate(params)
     } catch (error) {
-      console.warn(`Image provider "${providerId || primary.id}" generate failed:`, error.message)
+      console.warn(`Image provider "${providerId || primary?.id}" generate failed:`, error.message)
       throw new Error(`Image generation failed: ${error.message}`)
     }
   }
 
   /**
-   * Image editing via the selected provider. Returns the result on success,
-   * or throws the provider error on failure. No silent fallback.
+   * Image editing via the selected provider. When `aiMode` is supplied, it
+   * overrides the explicit `provider` to enforce the chosen mode.
    */
-  async edit({ provider: providerId, ...params } = {}) {
-    const primary = this.select(providerId)
-    if (!primary) {
-      throw new Error('No image provider available.')
+  async edit({ provider: providerId, aiMode, ...params } = {}) {
+    let primary
+    if (aiMode === 'local') {
+      primary = await this.selectForMode('local')
+    } else if (aiMode === 'cloud') {
+      primary = await this.selectForMode('cloud')
+    } else {
+      primary = this.select(providerId)
     }
+
+    if (!primary) {
+      const modeLabel = aiMode === 'local' ? 'Local' : aiMode === 'cloud' ? 'Cloud' : 'Requested'
+      throw new Error(`${modeLabel} AI image generation is unavailable.`)
+    }
+
     try {
       return await primary.edit(params)
     } catch (error) {
-      console.warn(`Image provider "${providerId || primary.id}" edit failed:`, error.message)
+      console.warn(`Image provider "${providerId || primary?.id}" edit failed:`, error.message)
       throw new Error(`Image edit failed: ${error.message}`)
     }
   }

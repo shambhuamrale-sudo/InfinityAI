@@ -1,6 +1,5 @@
 import { BaseImageProvider } from './BaseImageProvider.js'
 import { LocalImageProvider } from './LocalImageProvider.js'
-import { renderPlaceholderImage } from './imageUtils.js'
 
 /**
  * CloudImageProvider

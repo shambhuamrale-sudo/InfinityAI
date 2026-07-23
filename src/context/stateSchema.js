@@ -62,7 +62,7 @@ const DEFAULT_STATE = {
   activity: [],
   logs: [],
   coupons: [],
-  preferences: { notificationsEnabled: true, motionEnabled: true, autoSave: true, darkMode: true, reducedMotion: false, chatProvider: 'openrouter', chatModel: '' },
+  preferences: { notificationsEnabled: true, motionEnabled: true, autoSave: true, darkMode: true, reducedMotion: false, chatProvider: 'openrouter', chatModel: '', defaultAIMode: 'cloud' },
   ui: {
     commandPaletteOpen: false,
     notificationsOpen: false,

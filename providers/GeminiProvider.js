@@ -1,6 +1,5 @@
 import { BaseProvider } from './BaseProvider.js'
 import {
-  buildChatFallback,
   fetchWithTimeout,
   toChatMessages,
   postChat,

@@ -2,9 +2,13 @@ import { useEffect, useRef, useState } from 'react'
 import { motion } from 'framer-motion'
 
 function AnimatedNumber({ value, suffix = '' }) {
-  const [display, setDisplay] = useState(0)
+  const [display, setDisplay] = useState(typeof value === 'number' ? 0 : value)
   const fromRef = useRef(0)
   useEffect(() => {
+    if (typeof value !== 'number') {
+      setDisplay(value)
+      return
+    }
     let frame = 0
     const start = performance.now()
     const duration = 750
@@ -19,7 +23,7 @@ function AnimatedNumber({ value, suffix = '' }) {
     frame = requestAnimationFrame(tick)
     return () => cancelAnimationFrame(frame)
   }, [value])
-  return <span>{display.toLocaleString()}{suffix}</span>
+  return <span>{typeof display === 'number' ? display.toLocaleString() : display}{suffix}</span>
 }
 
 export default function StatTile({ title, value, suffix = '', note, accent, icon: Icon, index = 0 }) {

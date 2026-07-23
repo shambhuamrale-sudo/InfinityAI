@@ -14,6 +14,7 @@ export { DeepSeekProvider } from './DeepSeekProvider.js'
 export { MistralProvider } from './MistralProvider.js'
 export { OpenRouterProvider } from './OpenRouterProvider.js'
 export { GroqProvider } from './GroqProvider.js'
+export { LMStudioProvider } from './LMStudioProvider.js'
 export { ProviderManager, createProviderManager } from './ProviderManager.js'
 
 // ── Image provider system (Phase 4) ──────────────────────────────────────────

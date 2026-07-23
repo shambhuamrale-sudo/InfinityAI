@@ -2,25 +2,21 @@ import { AreaChart, Area, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YA
 import { RadioTower, Layers3, Cpu, Gauge, ShieldCheck, Activity } from 'lucide-react'
 import StatusBadge from './StatusBadge'
 
-const chartData = [
-  { name: 'Mon', usage: 40 }, { name: 'Tue', usage: 58 }, { name: 'Wed', usage: 47 },
-  { name: 'Thu', usage: 72 }, { name: 'Fri', usage: 84 }, { name: 'Sat', usage: 69 }, { name: 'Sun', usage: 91 }
-]
+const chartData = []
 
 export default function AnalyticsPanel({ adminConfig, isDark }) {
   const soft = 'glass'
   const muted = 'text-slate-400'
-  const providerStatuses = adminConfig?.providerStatuses || {}
   const providerConfig = adminConfig?.providerConfig || {}
   const tick = isDark ? '#94a3b8' : '#64748b'
 
   const statusItems = [
-    { name: 'Provider Status', value: 'Available', detail: providerConfig.chatProvider || 'openrouter', icon: RadioTower },
-    { name: 'Image Provider', value: 'Available', detail: providerConfig.imageProvider || 'local', icon: Layers3 },
-    { name: 'Current Model', value: 'Hybrid', detail: 'Streaming responses', icon: Cpu },
-    { name: 'Response Time', value: '118ms', detail: 'Low-latency', icon: Gauge },
-    { name: 'GPU Status', value: 'Ready', detail: 'Inference available', icon: ShieldCheck },
-    { name: 'Queue Status', value: 'Stable', detail: 'No backlog', icon: Activity }
+    { name: 'Provider Status', value: providerConfig.chatProvider ? 'Available' : 'Unavailable', detail: providerConfig.chatProvider || 'Not Detected', icon: RadioTower },
+    { name: 'Image Provider', value: providerConfig.imageProvider ? 'Available' : 'Unavailable', detail: providerConfig.imageProvider || 'Not Detected', icon: Layers3 },
+    { name: 'Current Model', value: 'Unavailable', detail: 'No active model telemetry', icon: Cpu },
+    { name: 'Response Time', value: 'Unavailable', detail: 'No active model telemetry', icon: Gauge },
+    { name: 'GPU Status', value: 'Unavailable', detail: 'No active model telemetry', icon: ShieldCheck },
+    { name: 'Queue Status', value: 'Unavailable', detail: 'No active model telemetry', icon: Activity }
   ]
 
   return (
@@ -30,7 +26,6 @@ export default function AnalyticsPanel({ adminConfig, isDark }) {
           <p className={`text-sm ${muted}`}>Live analytics</p>
           <h3 className="text-lg font-semibold text-white">Performance snapshot</h3>
         </div>
-        <span className="rounded-full border border-emerald-400/25 bg-emerald-400/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-emerald-300">+14% WoW</span>
       </div>
       <div className="h-48 w-full">
         <ResponsiveContainer width="100%" height="100%">

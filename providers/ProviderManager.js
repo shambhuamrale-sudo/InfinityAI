@@ -6,6 +6,7 @@ import { DeepSeekProvider } from './DeepSeekProvider.js'
 import { MistralProvider } from './MistralProvider.js'
 import { OpenRouterProvider } from './OpenRouterProvider.js'
 import { GroqProvider } from './GroqProvider.js'
+import { LMStudioProvider } from './LMStudioProvider.js'
 
 /**
  * ProviderManager
@@ -14,10 +15,11 @@ import { GroqProvider } from './GroqProvider.js'
  *
  * Responsibilities (Phase 2):
  *   - register providers and expose them by id
- *   - select the active provider (with safe fallback to Ollama)
+ *   - select the active provider (with safe fallback to default)
  *   - check provider availability
  *   - validate API keys
  *   - expose provider capabilities and model catalogs
+ *   - select providers by AI mode (cloud / local)
  *
  * The manager is the ONLY thing the server routes talk to; adding a provider
  * means registering it here, nothing else changes.
@@ -27,6 +29,14 @@ export class ProviderManager {
     /** @type {Map<string, import('./BaseProvider.js').BaseProvider>} */
     this.providers = new Map()
     this.defaultProviderId = defaultProviderId
+  }
+
+  static get LOCAL_PROVIDER_ORDER() {
+    return ['ollama', 'lm-studio']
+  }
+
+  static get CLOUD_PROVIDER_ORDER() {
+    return ['openrouter', 'groq', 'openai', 'gemini', 'anthropic', 'deepseek', 'mistral']
   }
 
   /** Register a provider instance. */
@@ -52,12 +62,36 @@ export class ProviderManager {
 
   /**
    * Resolve the provider to use for a request. Falls back to the default
-   * (Ollama) when the requested id is unknown, so callers can never break.
+   * (openrouter) when the requested id is unknown, so callers can never break.
    * @param {string} [requestedId]
    */
   select(requestedId) {
     if (requestedId && this.has(requestedId)) return this.get(requestedId)
     return this.get(this.defaultProviderId)
+  }
+
+  /**
+   * Select the first available provider matching the requested AI mode.
+   * For 'local': tries Ollama then LM Studio.
+   * For 'cloud': tries the configured cloud default.
+   * Returns undefined when no provider in that mode is available.
+   * @param {'cloud' | 'local'} mode
+   */
+  async selectForMode(mode) {
+    if (mode === 'local') {
+      for (const id of ProviderManager.LOCAL_PROVIDER_ORDER) {
+        const provider = this.get(id)
+        if (provider && await provider.isAvailable().catch(() => false)) {
+          return provider
+        }
+      }
+      return undefined
+    }
+    const cloudProvider = this.select(this.defaultProviderId)
+    if (cloudProvider && await cloudProvider.isAvailable().catch(() => false)) {
+      return cloudProvider
+    }
+    return undefined
   }
 
   /**
@@ -84,7 +118,7 @@ export class ProviderManager {
 
   /**
    * List all providers together with their model catalogs. Model discovery may
-   * hit the network (Ollama), so this is async and resilient per-provider.
+   * hit the network (Ollama, LM Studio), so this is async and resilient per-provider.
    */
   async listProvidersWithModels() {
     const out = []
@@ -115,6 +149,17 @@ export class ProviderManager {
     return results
   }
 
+  /** Check whether any local provider is currently available. */
+  async checkLocalAvailability() {
+    for (const id of ProviderManager.LOCAL_PROVIDER_ORDER) {
+      const provider = this.get(id)
+      if (provider && await provider.isAvailable().catch(() => false)) {
+        return { available: true, providerId: id }
+      }
+    }
+    return { available: false, providerId: null }
+  }
+
   /** Validate an API key for a provider. */
   async validateApiKey(id, apiKey) {
     const provider = this.get(id)
@@ -139,14 +184,22 @@ export class ProviderManager {
    * on success, or throws the provider error on failure. No silent fallback
    * to fake responses.
    */
-  async chat({ provider: providerId, prompt, model, messages } = {}) {
-    const primary = this.select(providerId)
-    const params = { prompt, model, messages }
+  async chat({ provider: providerId, prompt, model, messages, aiMode } = {}) {
+    let primary
+    if (aiMode === 'local') {
+      primary = await this.selectForMode('local')
+      if (!primary) {
+        throw new Error('Local AI is unavailable. Switch to Cloud mode or verify your local setup.')
+      }
+    } else {
+      primary = this.select(providerId)
+    }
 
     if (!primary) {
       throw new Error('No AI provider available.')
     }
 
+    const params = { prompt, model, messages }
     try {
       return await primary.chat(params)
     } catch (error) {
@@ -159,24 +212,34 @@ export class ProviderManager {
    * Stream a chat completion via the selected provider. Throws the provider
    * error on failure. No silent fallback.
    */
-  async streamChat({ provider: providerId, prompt, model, messages } = {}, onChunk) {
-    const primary = this.select(providerId)
-    const params = { prompt, model, messages }
+  async streamChat({ provider: providerId, prompt, model, messages, aiMode } = {}, onChunk) {
+    let primary
+    if (aiMode === 'local') {
+      primary = await this.selectForMode('local')
+      if (!primary) {
+        throw new Error('Local AI is unavailable. Switch to Cloud mode or verify your local setup.')
+      }
+    } else {
+      primary = this.select(providerId)
+    }
+
     if (!primary) {
       throw new Error('No AI provider available.')
     }
+    const params = { prompt, model, messages }
     return primary.streamChat(params, onChunk)
   }
 }
 
 /**
  * Build a manager pre-registered with every Phase 2 provider.
- * Only Ollama is fully implemented; the rest are configured placeholders.
+ * Cloud is default; local providers activate when reachable.
  */
 export function createProviderManager(env = {}, defaultProviderId = process.env.DEFAULT_PROVIDER || 'openrouter') {
   const manager = new ProviderManager(defaultProviderId)
   manager
     .register(new OllamaProvider(env.ollama))
+    .register(new LMStudioProvider(env.lmStudio))
     .register(new OpenAIProvider(env.openai))
     .register(new GeminiProvider(env.gemini))
     .register(new AnthropicProvider(env.anthropic))

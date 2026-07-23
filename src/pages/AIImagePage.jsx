@@ -15,6 +15,7 @@ export default function AIImagePage() {
   const {
     images,
     imageStudio,
+    preferences,
     addImageEntry,
     deleteImageEntry,
     toggleImageFavorite,
@@ -101,6 +102,7 @@ export default function AIImagePage() {
       steps: Number(steps),
       guidanceScale: Number(guidanceScale),
       batchSize: Number(batchSize),
+      aiMode: preferences?.defaultAIMode || 'cloud',
       ...(seed !== '' && seed !== null ? { seed: Number(seed) } : {})
     }
     const data = await studio.generate(params)
@@ -140,7 +142,8 @@ export default function AIImagePage() {
       width: source?.width || dimensions.width,
       height: source?.height || dimensions.height,
       steps: Number(steps),
-      guidanceScale: Number(guidanceScale)
+      guidanceScale: Number(guidanceScale),
+      aiMode: preferences?.defaultAIMode || 'cloud'
     })
     if (data?.cancelled || data?.error) {
       setStatusText(data?.error ? 'Edit failed' : 'Edit cancelled')

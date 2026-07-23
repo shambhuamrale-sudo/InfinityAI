@@ -15,10 +15,6 @@ import useChat from '../hooks/useChat'
 export default function AIChatPage() {
   const { preferences, canUseTool, addFavorite } = useAppContext()
 
-  useEffect(() => {
-    loadConversations()
-  }, [])
-
   const {
     conversationId,
     messages,
@@ -53,6 +49,15 @@ export default function AIChatPage() {
     scrollToBottom
   } = useChat()
 
+  const loadConversationsRef = useRef(loadConversations)
+  useEffect(() => {
+    loadConversationsRef.current = loadConversations
+  })
+
+  useEffect(() => {
+    loadConversationsRef.current()
+  }, [])
+
   const [prompt, setPrompt] = useState('')
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [showExportMenu, setShowExportMenu] = useState(false)
@@ -86,7 +91,7 @@ export default function AIChatPage() {
     }
     const text = prompt.trim()
     setPrompt('')
-    await sendMessage(text, { provider: preferences?.chatProvider, model: preferences?.chatModel })
+    await sendMessage(text, { provider: preferences?.chatProvider, model: preferences?.chatModel, aiMode: preferences?.defaultAIMode })
   }
 
   const handleRetry = async (index) => {

@@ -32,12 +32,12 @@ import RoadmapPage from './pages/RoadmapPage'
 import StatusPage from './pages/StatusPage'
 import NotFoundPage from './pages/NotFoundPage'
 import CommandPalette from './components/CommandPalette'
+import LocalAIPage from './pages/LocalAIPage'
 import NotificationsCenter from './components/NotificationsCenter'
 import UpgradeModal from './components/UpgradeModal'
 import UserMenu from './components/UserMenu'
 import ToastViewport from './components/ToastViewport'
 import PageLoader from './components/PageLoader'
-import ProviderStatusIndicator from './components/ProviderStatusIndicator'
 import VisionPage from './pages/VisionPage'
 import OCRPage from './pages/OCRPage'
 import GrammarPage from './pages/GrammarPage'
@@ -51,28 +51,11 @@ import CodeExplainerPage from './pages/CodeExplainerPage'
 import CodeOptimizerPage from './pages/CodeOptimizerPage'
 import ForgotPasswordPage from './pages/ForgotPasswordPage'
 import { useAppContext } from './context/useAppContext'
-import { API_BASE } from './config/api'
 
 function AppShell() {
   const location = useLocation()
-  const { setCommandPaletteOpen, setNotificationsOpen, auth } = useAppContext()
+  const { setCommandPaletteOpen, setNotificationsOpen, auth, aiMode } = useAppContext()
   const [loading, setLoading] = useState(false)
-  const [providerStatuses, setProviderStatuses] = useState({ openrouter: 'unknown', comfyui: 'unknown' })
-
-  useEffect(() => {
-    const fetchStatuses = async () => {
-      try {
-        const [chatRes] = await Promise.all([
-          fetch(`${API_BASE}/providers/availability`, { credentials: 'include' }).catch(() => null)
-        ])
-        if (chatRes?.ok) {
-          const data = await chatRes.json()
-          setProviderStatuses(data.availability || {})
-        }
-      } catch {}
-    }
-    fetchStatuses()
-  }, [])
 
   useEffect(() => {
     setLoading(true)
@@ -95,7 +78,7 @@ function AppShell() {
     return () => window.removeEventListener('keydown', handler)
   }, [setCommandPaletteOpen, setNotificationsOpen])
 
-  const isProtectedRoute = useMemo(() => ['/dashboard', '/chat', '/image', '/writer', '/code', '/pdf', '/translate', '/profile', '/settings', '/chat-history', '/image-history', '/favorites', '/notifications', '/subscription', '/admin'].includes(location.pathname), [location.pathname])
+  const isProtectedRoute = useMemo(() => ['/dashboard', '/chat', '/image', '/local-ai', '/writer', '/code', '/pdf', '/translate', '/profile', '/settings', '/chat-history', '/image-history', '/favorites', '/notifications', '/subscription', '/admin'].includes(location.pathname), [location.pathname])
 
   const renderProtected = (element) => {
     if (auth.loading) return <PageLoader />
@@ -115,8 +98,16 @@ function AppShell() {
       {isProtectedRoute && auth.isAuthenticated ? (
         <div className="fixed bottom-4 right-4 z-[80] flex flex-col items-end gap-3">
           <div className="flex items-center gap-2 rounded-full border border-white/10 bg-[#0a0c14]/80 px-3 py-2 text-sm text-slate-300 backdrop-blur-xl">
-            <ProviderStatusIndicator provider="openrouter" status={providerStatuses.openrouter || 'unknown'} className="border-0 bg-transparent px-0 py-0" />
-            <ProviderStatusIndicator provider="comfyui" status={providerStatuses.comfyui || 'unknown'} className="border-0 bg-transparent px-0 py-0" />
+            <span className={`inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[0.65rem] font-semibold uppercase tracking-[0.15em] ${
+              aiMode.cloudStatus === 'connected' ? 'bg-emerald-400/10 text-emerald-300 ring-1 ring-emerald-400/20' : 'bg-red-400/10 text-red-300 ring-1 ring-red-400/20'
+            }`}>
+              Cloud · {aiMode.cloudStatus === 'connected' ? 'Connected' : aiMode.cloudStatus === 'unavailable' ? 'Unavailable' : 'Unknown'}
+            </span>
+            <span className={`inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[0.65rem] font-semibold uppercase tracking-[0.15em] ${
+              aiMode.localStatus === 'running' ? 'bg-emerald-400/10 text-emerald-300 ring-1 ring-emerald-400/20' : aiMode.localStatus === 'stopped' ? 'bg-slate-400/10 text-slate-400 ring-1 ring-slate-400/20' : 'bg-amber-400/10 text-amber-300 ring-1 ring-amber-400/20'
+            }`}>
+              Local · {aiMode.localStatus === 'running' ? 'Running' : aiMode.localStatus === 'stopped' ? 'Stopped' : 'Not Installed'}
+            </span>
           </div>
           <motion.button whileHover={{ scale: 1.03, y: -2 }} whileTap={{ scale: 0.97 }} onClick={() => setCommandPaletteOpen(true)} className="rounded-full brand-gradient p-4 text-white shadow-[0_16px_60px_-16px_rgba(129,140,248,0.7)]">
             <span className="text-lg font-semibold">＋</span>
@@ -132,6 +123,7 @@ function AppShell() {
         <Route path="/dashboard" element={renderProtected(<DashboardPage />)} />
         <Route path="/chat" element={renderProtected(<AIChatPage />)} />
         <Route path="/image" element={renderProtected(<AIImagePage />)} />
+        <Route path="/local-ai" element={renderProtected(<LocalAIPage />)} />
         <Route path="/writer" element={renderProtected(<WriterPage />)} />
         <Route path="/code" element={renderProtected(<CodePage />)} />
         <Route path="/pdf" element={renderProtected(<PDFPage />)} />

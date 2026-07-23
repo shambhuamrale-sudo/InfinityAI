@@ -1,5 +1,5 @@
 import { BaseProvider } from './BaseProvider.js'
-import { buildChatFallback, fetchWithTimeout, messagesToPrompt } from './utils.js'
+import { fetchWithTimeout, messagesToPrompt } from './utils.js'
 
 /**
  * OllamaProvider

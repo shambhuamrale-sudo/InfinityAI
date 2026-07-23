@@ -1,6 +1,7 @@
 import { createRequire } from 'node:module'
 import { fileURLToPath } from 'node:url'
 import path from 'node:path'
+import os from 'node:os'
 const require = createRequire(import.meta.url)
 let pdfParse
 try { pdfParse = (await import('pdf-parse')).default || require('pdf-parse') } catch { pdfParse = null }
@@ -149,6 +150,7 @@ const defaultAdminConfig = {
   storageLimit: 100,
     providerStatuses: { openrouter: 'healthy', comfyui: 'healthy' },
     providerConfig: { chatProvider: DEFAULT_PROVIDER, imageProvider: 'local', writerProvider: 'backend', codeProvider: 'backend', pdfProvider: 'backend', translateProvider: 'backend' },
+    defaultAIMode: 'cloud',
   analytics: { totalUsers: 1284, activeUsers: 812, conversionRate: '8.4%' }
 }
 
@@ -473,26 +475,6 @@ async function enforcePlanLimit(state, tool, res) {
   return null
 }
 
-function buildFallbackText(kind, prompt) {
-  const normalized = (prompt || '').trim() || 'your prompt'
-  if (kind === 'chat') {
-    return `Here is a practical response for: ${normalized}\n\n- Summarize the key points.\n- Suggest the next action.\n- Offer a polished draft you can refine.`
-  }
-  if (kind === 'writer') {
-    return `Draft copy for ${normalized}:\n\nLaunch your next idea with a clear promise, benefit-led messaging, and confident calls to action.`
-  }
-  if (kind === 'code') {
-    return `// Generated starter for: ${normalized}\nexport function buildSolution() {\n  return 'Implementation ready';\n}`
-  }
-  if (kind === 'pdf') {
-    return `Summary for ${normalized}:\n\n- Main takeaway\n- Key decision\n- Suggested next step`
-  }
-  if (kind === 'translate') {
-    return `Translated draft for ${normalized}`
-  }
-  return normalized
-}
-
 app.get('/api/health', (_req, res) => {
   res.json({ ok: true, message: 'Aditya AI API is running' })
 })
@@ -775,6 +757,7 @@ app.post('/api/chat', userLimiter, async (req, res) => {
   const state = await loadState()
   const limitResponse = await enforcePlanLimit(state, 'chat', res)
   if (limitResponse) return
+  const aiMode = req.body?.aiMode
   const provider = req.body?.provider || state.adminConfig.providerConfig?.chatProvider || DEFAULT_PROVIDER
   const model = req.body?.model || state.adminConfig.providerConfig?.chatModel || process.env.OLLAMA_MODEL || 'llama3.2'
   const stream = Boolean(req.body?.stream)
@@ -784,14 +767,31 @@ app.post('/api/chat', userLimiter, async (req, res) => {
     res.setHeader('Connection', 'keep-alive')
     res.flushHeaders?.()
     try {
-      const selected = providerManager.select(provider)
-      if (selected && selected.streamChat) {
-        await selected.streamChat({ prompt, model, messages }, (chunk) => {
-          res.write(`data: ${JSON.stringify({ text: chunk })}\n\n`)
-        })
+      if (aiMode === 'local') {
+        const localProvider = await providerManager.selectForMode('local')
+        if (!localProvider) {
+          res.write(`data: ${JSON.stringify({ error: 'Local AI is unavailable. Switch to Cloud mode or verify your local setup.' })}\n\n`)
+          res.write('data: [DONE]\n\n')
+          return res.end()
+        }
+        if (localProvider.streamChat) {
+          await localProvider.streamChat({ prompt, model, messages }, (chunk) => {
+            res.write(`data: ${JSON.stringify({ text: chunk })}\n\n`)
+          })
+        } else {
+          const result = await localProvider.chat({ prompt, model, messages })
+          res.write(`data: ${JSON.stringify({ text: result.text })}\n\n`)
+        }
       } else {
-        const result = await providerManager.chat({ provider, prompt, model, messages })
-        res.write(`data: ${JSON.stringify({ text: result.text })}\n\n`)
+        const selected = providerManager.select(provider)
+        if (selected && selected.streamChat) {
+          await selected.streamChat({ prompt, model, messages }, (chunk) => {
+            res.write(`data: ${JSON.stringify({ text: chunk })}\n\n`)
+          })
+        } else {
+          const result = await providerManager.chat({ provider, prompt, model, messages })
+          res.write(`data: ${JSON.stringify({ text: result.text })}\n\n`)
+        }
       }
     } catch (error) {
       res.write(`data: ${JSON.stringify({ error: error.message })}\n\n`)
@@ -801,7 +801,7 @@ app.post('/api/chat', userLimiter, async (req, res) => {
     return res.end()
   }
   try {
-    const result = await providerManager.chat({ provider, prompt, model, messages })
+    const result = await providerManager.chat({ provider, prompt, model, messages, aiMode })
     await saveState({ ...state, usage: { ...state.usage, dayChats: state.usage.dayChats + 1, monthChats: state.usage.monthChats + 1 } })
     res.json(result)
   } catch (error) {
@@ -884,10 +884,11 @@ app.post('/api/image', userLimiter, async (req, res) => {
   const state = await loadState()
   const limitResponse = await enforcePlanLimit(state, 'image', res)
   if (limitResponse) return
+  const aiMode = req.body?.aiMode
   const provider = req.body?.provider || state.adminConfig.providerConfig?.imageProvider || imageProviderManager.defaultProviderId
   const params = sanitizeImageParams(req.body)
   try {
-    const result = await imageProviderManager.generate({ provider, ...params })
+    const result = await imageProviderManager.generate({ provider, aiMode, ...params })
     const normalized = {
       success: true,
       images: Array.isArray(result.images) ? result.images : [],
@@ -910,6 +911,7 @@ app.post('/api/image/edit', async (req, res) => {
   const state = await loadState()
   const limitResponse = await enforcePlanLimit(state, 'image', res)
   if (limitResponse) return
+  const aiMode = req.body?.aiMode
   const provider = req.body?.provider || state.adminConfig.providerConfig?.imageProvider || imageProviderManager.defaultProviderId
   const validOps = ['image-to-image', 'inpaint', 'outpaint', 'upscale', 'background-removal', 'face-restoration', 'crop-resize']
   const operation = validOps.includes(req.body?.operation) ? req.body.operation : 'image-to-image'
@@ -917,7 +919,7 @@ app.post('/api/image/edit', async (req, res) => {
   const image = typeof req.body?.image === 'string' ? req.body.image : undefined
   const denoisingStrength = Number.isFinite(Number(req.body?.denoisingStrength)) ? Number(req.body.denoisingStrength) : 0.6
   try {
-    const result = await imageProviderManager.edit({ provider, operation, image, denoisingStrength, ...params })
+    const result = await imageProviderManager.edit({ provider, aiMode, operation, image, denoisingStrength, ...params })
     const normalized = {
       success: true,
       images: Array.isArray(result.images) ? result.images : [],
@@ -1367,6 +1369,374 @@ app.post('/api/preferences', async (req, res) => {
   const nextState = await saveState({ ...state, preferences: { ...state.preferences, ...(req.body || {}) } })
   res.json(nextState.preferences)
 })
+
+// ── Hybrid AI Mode (Phase 1) ─────────────────────────────────────────────────
+
+app.get('/api/ai-mode', async (req, res) => {
+  const state = await loadState()
+  const mode = state.preferences?.defaultAIMode || state.adminConfig?.defaultAIMode || 'cloud'
+  const localAvailable = await providerManager.checkLocalAvailability()
+  const localImageAvailable = await imageProviderManager.checkLocalAvailability()
+  res.json({
+    mode,
+    localAvailable: localAvailable.available,
+    localChatProvider: localAvailable.providerId,
+    localImageAvailable: localImageAvailable.available,
+    localImageProvider: localImageAvailable.providerId
+  })
+})
+
+app.post('/api/ai-mode', async (req, res) => {
+  const state = await loadState()
+  const mode = typeof req.body?.mode === 'string' && ['cloud', 'local'].includes(req.body.mode) ? req.body.mode : 'cloud'
+  const nextState = await saveState({ ...state, preferences: { ...state.preferences, defaultAIMode: mode } })
+  res.json({ mode: nextState.preferences.defaultAIMode })
+})
+
+app.get('/api/ai-status', async (req, res) => {
+  const state = await loadState()
+  const cloudConnected = await providerManager.checkAvailability(state.adminConfig?.providerConfig?.chatProvider || DEFAULT_PROVIDER)
+  const localStatus = await providerManager.checkLocalAvailability()
+  const localImageStatus = await imageProviderManager.checkLocalAvailability()
+  res.json({
+    cloud: { status: cloudConnected.available ? 'connected' : 'unavailable', provider: state.adminConfig?.providerConfig?.chatProvider || DEFAULT_PROVIDER },
+    local: { status: localStatus.available ? 'running' : 'stopped', chatProvider: localStatus.providerId, imageStatus: localImageStatus.available ? 'running' : 'stopped', imageProvider: localImageStatus.providerId }
+  })
+})
+
+// ── Local AI Manager (Phase 1) ───────────────────────────────────────────────
+
+app.get('/api/local-ai/hardware', async (_req, res) => {
+  try {
+    const cpus = os.cpus()
+    const totalMem = os.totalmem()
+    const freeMem = os.freemem()
+    const platform = os.platform()
+    const arch = os.arch()
+
+    let gpuInfo = { vendor: 'Unknown', name: 'Not detected', vram: 'Unknown' }
+    let cudaSupport = false
+    let rocmSupport = false
+    let metalSupport = platform === 'darwin'
+
+    try {
+      const { execSync } = await import('node:child_process')
+      try {
+        execSync('nvidia-smi', { encoding: 'utf8', timeout: 5000 })
+        const nvidiaSmi = execSync('nvidia-smi --query-gpu=name,memory.total --format=csv,noheader,nounits', { encoding: 'utf8', timeout: 5000 }).trim().split('\n')
+        if (nvidiaSmi.length > 0) {
+          const parts = nvidiaSmi[0].split(',')
+          gpuInfo = { vendor: 'NVIDIA', name: parts[0]?.trim() || 'NVIDIA GPU', vram: parts[1]?.trim() ? `${parts[1].trim()} MB` : 'detected' }
+        }
+        cudaSupport = true
+      } catch {
+        try {
+          execSync('rocm-smi', { encoding: 'utf8', timeout: 5000 })
+          gpuInfo = { vendor: 'AMD', name: 'AMD GPU', vram: 'ROCm detected' }
+          rocmSupport = true
+        } catch {
+          if (platform === 'darwin') {
+            try {
+              const sp = execSync('system_profiler SPDisplaysDataType', { encoding: 'utf8', timeout: 5000 })
+              const match = sp.match(/Chipset Model: (.+)/)
+              gpuInfo = { vendor: 'Apple', name: match ? match[1].trim() : 'Apple Silicon', vram: 'Unified Memory' }
+              metalSupport = true
+            } catch {}
+          }
+        }
+      }
+    } catch {}
+
+    res.json({
+      cpu: { model: cpus[0]?.model || 'Unknown', cores: cpus.length, speed: cpus[0] ? `${(cpus[0].speed / 1000).toFixed(1)} GHz` : 'Unknown' },
+      ram: { total: Math.round(totalMem / 1024 / 1024 / 1024 * 10) / 10, available: Math.round(freeMem / 1024 / 1024 / 1024 * 10) / 10 },
+      gpu: gpuInfo,
+      os: { platform, arch, release: os.release(), type: os.type(), hostname: os.hostname() },
+      cudaSupport,
+      rocmSupport,
+      metalSupport,
+      nodeVersion: process.version
+    })
+  } catch (error) {
+    res.status(500).json({ error: error.message })
+  }
+})
+
+app.get('/api/local-ai/providers/status', async (_req, res) => {
+  const checks = [
+    { id: 'ollama', name: 'Ollama', port: 11434, endpoint: '/api/tags' },
+    { id: 'comfyui', name: 'ComfyUI', port: 8188, endpoint: '/api/status' },
+    { id: 'automatic1111', name: 'Automatic1111', port: 7860, endpoint: '/sdapi/v1/sd-models' },
+    { id: 'lm-studio', name: 'LM Studio', port: 1234, endpoint: '/v1/models' }
+  ]
+
+  const results = []
+  for (const provider of checks) {
+    let available = false
+    let version = null
+    let health = 'unknown'
+    const startTime = Date.now()
+    try {
+      const controller = new AbortController()
+      const id = setTimeout(() => controller.abort(), 2500)
+      const response = await fetch(`http://127.0.0.1:${provider.port}${provider.endpoint}`, { signal: controller.signal })
+      clearTimeout(id)
+      available = response.ok
+      if (available) {
+        try {
+          const data = await response.json()
+          version = data.version || data.system?.version || null
+        } catch {}
+        health = 'healthy'
+      } else {
+        health = 'offline'
+      }
+    } catch {
+      health = 'offline'
+    }
+    results.push({
+      ...provider,
+      running: available,
+      stopped: !available,
+      installed: available,
+      status: available ? 'running' : 'stopped',
+      health,
+      version,
+      port: provider.port,
+      responseTime: Date.now() - startTime
+    })
+  }
+  res.json({ providers: results })
+})
+
+const downloadStore = new Map()
+
+app.get('/api/local-ai/models', async (_req, res) => {
+  const models = []
+
+  try {
+    const controller = new AbortController()
+    const id = setTimeout(() => controller.abort(), 3000)
+    const response = await fetch('http://127.0.0.1:11434/api/tags', { signal: controller.signal })
+    clearTimeout(id)
+    if (response.ok) {
+      const data = await response.json()
+      const ollamaModels = Array.isArray(data.models) ? data.models : []
+      models.push(...ollamaModels.map((m) => ({
+        name: m.name || m.model,
+        size: formatBytes(m.size),
+        quantization: m.details?.quantization_level || '—',
+        contextLength: m.details?.parameter_size || formatBytes(m.size),
+        provider: 'Ollama',
+        location: 'Local',
+        id: m.name || m.model
+      })))
+    }
+  } catch {}
+
+  res.json({ models })
+})
+
+app.get('/api/local-ai/recommendations', async (_req, res) => {
+  res.json({ recommendations: [] })
+})
+
+app.get('/api/local-ai/performance', async (_req, res) => {
+  const cpus = os.cpus()
+  const totalMem = os.totalmem()
+  const freeMem = os.freemem()
+  const cpuUsage = cpus.length > 0 ? Math.round((1 - cpus[0].times.idle / (cpus[0].times.user + cpus[0].times.sys + cpus[0].times.idle + cpus[0].times.nice + cpus[0].times.irq + cpus[0].times.softirq)) * 100) : 0
+
+  let gpuUsage = 0
+  let vramUsed = 0
+  let vramTotal = 0
+  try {
+    const { execSync } = await import('node:child_process')
+    try {
+      const nvidiaSmi = execSync('nvidia-smi --query-gpu=utilization.gpu,memory.used,memory.total --format=csv,noheader,nounits', { encoding: 'utf8', timeout: 5000 }).trim()
+      const parts = nvidiaSmi.split(',')
+      if (parts.length === 3) {
+        gpuUsage = parseInt(parts[0]?.trim(), 10) || 0
+        vramUsed = parseInt(parts[1]?.trim(), 10) || 0
+        vramTotal = parseInt(parts[2]?.trim(), 10) || 0
+      }
+    } catch {}
+  } catch {}
+
+  res.json({
+    cpu: { usage: Math.min(100, Math.max(0, cpuUsage)), cores: cpus.length },
+    ram: { used: Math.round((totalMem - freeMem) / 1024 / 1024 / 1024 * 10) / 10, total: Math.round(totalMem / 1024 / 1024 / 1024 * 10) / 10, percent: Math.min(100, Math.max(0, Math.round(((totalMem - freeMem) / totalMem) * 100))) },
+    gpu: { usage: gpuUsage, vramUsed, vramTotal },
+    tokensPerSec: null,
+    currentModel: null
+  })
+})
+
+app.post('/api/local-ai/models/download', async (req, res) => {
+  const { model, provider = 'ollama' } = req.body || {}
+  if (!model) return res.status(400).json({ error: 'Model name required' })
+
+  const downloadId = `dl_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`
+  const abortController = new AbortController()
+  const entry = {
+    id: downloadId,
+    model,
+    provider,
+    status: 'starting',
+    progress: 0,
+    bytes: 0,
+    totalBytes: 0,
+    speed: 0,
+    eta: 'Calculating...',
+    startTime: Date.now(),
+    abortController
+  }
+  downloadStore.set(downloadId, entry)
+
+  res.json({ downloadId, model, provider, status: 'started' })
+
+  const runPull = async (signal) => {
+    try {
+      entry.status = 'downloading'
+      const response = await fetch(`http://127.0.0.1:11434/api/pull`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: model, stream: true }),
+        signal
+      })
+      if (!response.ok) {
+        entry.status = 'error'
+        entry.error = `Ollama responded with ${response.status}`
+        return
+      }
+      const reader = response.body?.getReader?.()
+      if (!reader) {
+        entry.status = 'downloading'
+        entry.progress = 50
+        entry.eta = 'Waiting...'
+        await response.text()
+        entry.status = 'completed'
+        entry.progress = 100
+        entry.eta = 'Complete'
+        return
+      }
+      const decoder = new TextDecoder()
+      let lastTime = Date.now()
+      let lastBytes = 0
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+        const chunk = decoder.decode(value, { stream: true })
+        const lines = chunk.split('\n').filter(line => line.trim())
+        for (const line of lines) {
+          try {
+            const parsed = JSON.parse(line)
+            if (typeof parsed.completed === 'number' && typeof parsed.total === 'number' && parsed.total > 0) {
+              entry.bytes = parsed.completed
+              entry.totalBytes = parsed.total
+              entry.progress = Math.round((parsed.completed / parsed.total) * 100)
+              const now = Date.now()
+              const dt = (now - lastTime) / 1000
+              if (dt > 0.5 && parsed.completed > lastBytes) {
+                entry.speed = (parsed.completed - lastBytes) / dt
+                lastTime = now
+                lastBytes = parsed.completed
+                const remaining = parsed.total - parsed.completed
+                if (entry.speed > 0 && remaining > 0) {
+                  const secs = remaining / entry.speed
+                  const minutes = Math.floor(secs / 60)
+                  const s = Math.round(secs % 60)
+                  entry.eta = minutes > 0 ? `${minutes}m ${s}s` : `${s}s`
+                }
+              }
+            }
+            if (parsed.status === 'success') {
+              entry.status = 'completed'
+              entry.progress = 100
+              entry.eta = 'Complete'
+              return
+            }
+          } catch {}
+        }
+      }
+      entry.status = 'completed'
+      entry.progress = 100
+      entry.eta = 'Complete'
+    } catch (error) {
+      if (signal.aborted) {
+        entry.status = 'cancelled'
+      } else {
+        entry.status = 'error'
+        entry.error = error.message
+      }
+    }
+  }
+
+  const timeout = setTimeout(() => {
+    if (entry.status === 'downloading') {
+      entry.status = 'completed'
+      entry.progress = 100
+      entry.eta = 'Complete (timeout)'
+    }
+  }, 600000)
+
+  runPull(abortController.signal).finally(() => {
+    clearTimeout(timeout)
+    setTimeout(() => downloadStore.delete(downloadId), 10000)
+  })
+})
+
+app.get('/api/local-ai/downloads', (_req, res) => {
+  const all = Array.from(downloadStore.values()).map(e => ({
+    id: e.id,
+    model: e.model,
+    provider: e.provider,
+    status: e.status,
+    progress: e.progress,
+    speed: e.speed,
+    eta: e.eta,
+    bytes: e.bytes,
+    totalBytes: e.totalBytes,
+    error: e.error
+  }))
+  res.json({ downloads: all })
+})
+
+app.get('/api/local-ai/downloads/:id', (req, res) => {
+  const { id } = req.params
+  const entry = downloadStore.get(id)
+  if (!entry) return res.status(404).json({ error: 'Download not found' })
+  res.json({
+    id: entry.id,
+    model: entry.model,
+    provider: entry.provider,
+    status: entry.status,
+    progress: entry.progress,
+    speed: entry.speed,
+    eta: entry.eta,
+    bytes: entry.bytes,
+    totalBytes: entry.totalBytes,
+    error: entry.error
+  })
+})
+
+app.delete('/api/local-ai/downloads/:id', (req, res) => {
+  const { id } = req.params
+  const entry = downloadStore.get(id)
+  if (entry) {
+    entry.abortController?.abort()
+    entry.status = 'cancelled'
+  }
+  res.json({ ok: true })
+})
+
+function formatBytes(bytes) {
+  if (!bytes || !Number.isFinite(bytes)) return '0 B'
+  const k = 1024
+  const sizes = ['B', 'KB', 'MB', 'GB', 'TB']
+  const i = Math.floor(Math.log(bytes) / Math.log(k))
+  return `${parseFloat((bytes / Math.pow(k, i)).toFixed(1))} ${sizes[i]}`
+}
 
 if (process.env.NODE_ENV === 'production') {
   app.use(express.static(path.join(__dirname, 'dist')))

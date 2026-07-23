@@ -56,11 +56,11 @@ export default function DashboardPage() {
   const stats = useMemo(() => [
     { title: 'AI Chats Today', value: usage?.dayChats || 0, suffix: '', note: `${planLimits.maxChatsPerDay || 20} daily cap`, icon: MessageSquareText },
     { title: 'Images Generated', value: usage?.dayImages || 0, suffix: '', note: 'Instant concepts ready', icon: ImagePlus },
-    { title: 'Documents Processed', value: Math.max(3, (activity?.length || 0) + 8), suffix: '', note: 'Saved into your workspace', icon: FileText },
-    { title: 'Storage Used', value: usage?.storageUsed || 24, suffix: ' GB', note: `${Math.max(1, (adminConfig?.storageLimit || 100) - (usage?.storageUsed || 24))} GB free`, icon: DatabaseZap },
-    { title: 'Tokens Used', value: 12840 + (usage?.monthChats || 0) * 120, suffix: 'k', note: 'High efficiency', icon: Zap },
-    { title: 'Total Projects', value: 24 + (images?.length || 0), suffix: '', note: 'Growing momentum', icon: Briefcase }
-  ], [activity?.length, images?.length, planLimits.maxChatsPerDay, usage?.dayChats, usage?.dayImages, usage?.monthChats, usage?.storageUsed, adminConfig?.storageLimit])
+    { title: 'Documents Processed', value: activity?.length || 0, suffix: '', note: 'Saved into your workspace', icon: FileText },
+    { title: 'Storage Used', value: usage?.storageUsed || 'Unavailable', suffix: ' GB', note: `${Math.max(1, (adminConfig?.storageLimit || 100) - (usage?.storageUsed || 24))} GB free`, icon: DatabaseZap },
+    { title: 'Tokens Used', value: 'Unavailable', suffix: '', note: 'Real token counts require provider telemetry', icon: Zap },
+    { title: 'Total Projects', value: images?.length || 0, suffix: '', note: 'Growing momentum', icon: Briefcase }
+  ], [activity?.length, images?.length, planLimits.maxChatsPerDay, usage?.dayChats, usage?.dayImages, usage?.storageUsed, adminConfig?.storageLimit])
 
   const recentChats = (chats || []).slice(0, 4)
   const recentImages = (images || []).slice(0, 4)
