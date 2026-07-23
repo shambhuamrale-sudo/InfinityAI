@@ -120,4 +120,4 @@ function normalizeState(input) {
   }
 }
 
-export { DEFAULT_STATE, createDefaultState, normalizeState }
+export { createDefaultState, normalizeState }

@@ -1,11 +1,12 @@
-import { memo, useMemo, useState } from 'react'
+import { memo, useMemo, useState, useEffect } from 'react'
 import { Check, Copy, Download, ChevronDown, ChevronUp } from 'lucide-react'
-import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter'
-import { oneDark } from 'react-syntax-highlighter/dist/esm/styles/prism'
+
+const FALLBACK_CLASSES = 'rounded-2xl bg-[#0d1117] p-5 font-mono text-sm leading-7 text-slate-300 overflow-x-auto whitespace-pre-wrap'
 
 function CodeBlock({ children, language, inline }) {
   const [copied, setCopied] = useState(false)
   const [expanded, setExpanded] = useState(true)
+  const [highlighter, setHighlighter] = useState(null)
   const codeString = String(children).replace(/\n$/, '')
 
   const handleCopy = async () => {
@@ -30,6 +31,17 @@ function CodeBlock({ children, language, inline }) {
   const shouldTruncate = lines.length > 50 && !expanded
   const displayCode = shouldTruncate ? lines.slice(0, 50).join('\n') + '\n...' : codeString
 
+  useEffect(() => {
+    if (inline) return
+    import('react-syntax-highlighter').then((m) => {
+      import('react-syntax-highlighter/dist/esm/styles/prism').then((styles) => {
+        setHighlighter({ Prism: m.Prism, oneDark: styles.oneDark })
+      }).catch(() => {
+        setHighlighter({ Prism: m.Prism, oneDark: null })
+      })
+    }).catch(() => {})
+  }, [inline, language])
+
   if (inline) {
     return (
       <code className="rounded-md bg-white/10 px-1.5 py-0.5 font-mono text-[0.85em] text-indigo-200">
@@ -37,6 +49,9 @@ function CodeBlock({ children, language, inline }) {
       </code>
     )
   }
+
+  const Highlighter = highlighter?.Prism || null
+  const oneDark = highlighter?.oneDark || null
 
   return (
     <div className="my-4 overflow-hidden rounded-2xl border border-white/10 bg-[#0d1117] shadow-2xl shadow-black/20">
@@ -60,16 +75,30 @@ function CodeBlock({ children, language, inline }) {
         </div>
       </div>
       <div className="overflow-x-auto">
-        <SyntaxHighlighter
-          language={language || 'text'}
-          style={oneDark}
-          showLineNumbers
-          lineNumberStyle={{ color: '#484f58', fontSize: '0.75rem', minWidth: '2.5em', textAlign: 'right', paddingRight: '1em' }}
-          customStyle={{ margin: 0, borderRadius: 0, background: 'transparent', padding: '1.25rem', fontSize: '0.85rem' }}
-          wrapLongLines={false}
-        >
-          {displayCode}
-        </SyntaxHighlighter>
+        {Highlighter && oneDark ? (
+          <Highlighter
+            language={language || 'text'}
+            style={oneDark}
+            showLineNumbers
+            lineNumberStyle={{ color: '#484f58', fontSize: '0.75rem', minWidth: '2.5em', textAlign: 'right', paddingRight: '1em' }}
+            customStyle={{ margin: 0, borderRadius: 0, background: 'transparent', padding: '1.25rem', fontSize: '0.85rem' }}
+            wrapLongLines={false}
+          >
+            {displayCode}
+          </Highlighter>
+        ) : Highlighter ? (
+          <Highlighter
+            language={language || 'text'}
+            showLineNumbers
+            lineNumberStyle={{ color: '#484f58', fontSize: '0.75rem', minWidth: '2.5em', textAlign: 'right', paddingRight: '1em' }}
+            customStyle={{ margin: 0, borderRadius: 0, background: 'transparent', padding: '1.25rem', fontSize: '0.85rem' }}
+            wrapLongLines={false}
+          >
+            {displayCode}
+          </Highlighter>
+        ) : (
+          <pre className={FALLBACK_CLASSES}><code>{displayCode}</code></pre>
+        )}
       </div>
     </div>
   )
@@ -236,5 +265,5 @@ function renderInline(text) {
   })
 }
 
-export { ChatMarkdown, CodeBlock }
+export { ChatMarkdown }
 export default memo(ChatMarkdown)

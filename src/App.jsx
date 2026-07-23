@@ -1,56 +1,57 @@
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom'
 import { AnimatePresence, motion } from 'framer-motion'
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, lazy, Suspense, useState } from 'react'
 import LandingPage from './pages/LandingPage'
 import AuthPage from './pages/AuthPage'
-import DashboardPage from './pages/DashboardPage'
-import PricingPage from './pages/PricingPage'
-import AdminPage from './pages/AdminPage'
-import AIChatPage from './pages/AIChatPage'
-import AIImagePage from './pages/AIImagePage'
-import ProfilePage from './pages/ProfilePage'
-import SettingsPage from './pages/SettingsPage'
-import ChatHistoryPage from './pages/ChatHistoryPage'
-import ImageHistoryPage from './pages/ImageHistoryPage'
-import FavoritesPage from './pages/FavoritesPage'
-import NotificationsPage from './pages/NotificationsPage'
-import SubscriptionPage from './pages/SubscriptionPage'
-import WriterPage from './pages/WriterPage'
-import CodePage from './pages/CodePage'
-import PDFPage from './pages/PDFPage'
-import TranslatePage from './pages/TranslatePage'
-import AboutPage from './pages/AboutPage'
-import ContactPage from './pages/ContactPage'
-import PrivacyPage from './pages/PrivacyPage'
-import TermsPage from './pages/TermsPage'
-import CookiesPage from './pages/CookiesPage'
-import HelpPage from './pages/HelpPage'
-import FeedbackPage from './pages/FeedbackPage'
-import BugReportPage from './pages/BugReportPage'
-import ReleaseNotesPage from './pages/ReleaseNotesPage'
-import RoadmapPage from './pages/RoadmapPage'
-import StatusPage from './pages/StatusPage'
+import ForgotPasswordPage from './pages/ForgotPasswordPage'
 import NotFoundPage from './pages/NotFoundPage'
 import CommandPalette from './components/CommandPalette'
-import LocalAIPage from './pages/LocalAIPage'
 import NotificationsCenter from './components/NotificationsCenter'
 import UpgradeModal from './components/UpgradeModal'
 import UserMenu from './components/UserMenu'
 import ToastViewport from './components/ToastViewport'
 import PageLoader from './components/PageLoader'
-import VisionPage from './pages/VisionPage'
-import OCRPage from './pages/OCRPage'
-import GrammarPage from './pages/GrammarPage'
-import EmailWriterPage from './pages/EmailWriterPage'
-import ResumeBuilderPage from './pages/ResumeBuilderPage'
-import SQLGeneratorPage from './pages/SQLGeneratorPage'
-import RegexGeneratorPage from './pages/RegexGeneratorPage'
-import JSONFormatterPage from './pages/JSONFormatterPage'
-import CodeDebuggerPage from './pages/CodeDebuggerPage'
-import CodeExplainerPage from './pages/CodeExplainerPage'
-import CodeOptimizerPage from './pages/CodeOptimizerPage'
-import ForgotPasswordPage from './pages/ForgotPasswordPage'
 import { useAppContext } from './context/useAppContext'
+
+const PricingPage = lazy(() => import('./pages/PricingPage'))
+const DashboardPage = lazy(() => import('./pages/DashboardPage'))
+const AdminPage = lazy(() => import('./pages/AdminPage'))
+const AIChatPage = lazy(() => import('./pages/AIChatPage'))
+const AIImagePage = lazy(() => import('./pages/AIImagePage'))
+const ProfilePage = lazy(() => import('./pages/ProfilePage'))
+const SettingsPage = lazy(() => import('./pages/SettingsPage'))
+const ChatHistoryPage = lazy(() => import('./pages/ChatHistoryPage'))
+const ImageHistoryPage = lazy(() => import('./pages/ImageHistoryPage'))
+const FavoritesPage = lazy(() => import('./pages/FavoritesPage'))
+const NotificationsPage = lazy(() => import('./pages/NotificationsPage'))
+const SubscriptionPage = lazy(() => import('./pages/SubscriptionPage'))
+const WriterPage = lazy(() => import('./pages/WriterPage'))
+const CodePage = lazy(() => import('./pages/CodePage'))
+const PDFPage = lazy(() => import('./pages/PDFPage'))
+const TranslatePage = lazy(() => import('./pages/TranslatePage'))
+const AboutPage = lazy(() => import('./pages/AboutPage'))
+const ContactPage = lazy(() => import('./pages/ContactPage'))
+const PrivacyPage = lazy(() => import('./pages/PrivacyPage'))
+const TermsPage = lazy(() => import('./pages/TermsPage'))
+const CookiesPage = lazy(() => import('./pages/CookiesPage'))
+const HelpPage = lazy(() => import('./pages/HelpPage'))
+const FeedbackPage = lazy(() => import('./pages/FeedbackPage'))
+const BugReportPage = lazy(() => import('./pages/BugReportPage'))
+const ReleaseNotesPage = lazy(() => import('./pages/ReleaseNotesPage'))
+const RoadmapPage = lazy(() => import('./pages/RoadmapPage'))
+const StatusPage = lazy(() => import('./pages/StatusPage'))
+const LocalAIPage = lazy(() => import('./pages/LocalAIPage'))
+const VisionPage = lazy(() => import('./pages/VisionPage'))
+const OCRPage = lazy(() => import('./pages/OCRPage'))
+const GrammarPage = lazy(() => import('./pages/GrammarPage'))
+const EmailWriterPage = lazy(() => import('./pages/EmailWriterPage'))
+const ResumeBuilderPage = lazy(() => import('./pages/ResumeBuilderPage'))
+const SQLGeneratorPage = lazy(() => import('./pages/SQLGeneratorPage'))
+const RegexGeneratorPage = lazy(() => import('./pages/RegexGeneratorPage'))
+const JSONFormatterPage = lazy(() => import('./pages/JSONFormatterPage'))
+const CodeDebuggerPage = lazy(() => import('./pages/CodeDebuggerPage'))
+const CodeExplainerPage = lazy(() => import('./pages/CodeExplainerPage'))
+const CodeOptimizerPage = lazy(() => import('./pages/CodeOptimizerPage'))
 
 function AppShell() {
   const location = useLocation()
@@ -120,46 +121,46 @@ function AppShell() {
         <Route path="/login" element={auth.isAuthenticated ? <Navigate to="/dashboard" replace /> : <AuthPage type="login" />} />
         <Route path="/signup" element={auth.isAuthenticated ? <Navigate to="/dashboard" replace /> : <AuthPage type="signup" />} />
         <Route path="/forgot-password" element={<ForgotPasswordPage />} />
-        <Route path="/dashboard" element={renderProtected(<DashboardPage />)} />
-        <Route path="/chat" element={renderProtected(<AIChatPage />)} />
-        <Route path="/image" element={renderProtected(<AIImagePage />)} />
-        <Route path="/local-ai" element={renderProtected(<LocalAIPage />)} />
-        <Route path="/writer" element={renderProtected(<WriterPage />)} />
-        <Route path="/code" element={renderProtected(<CodePage />)} />
-        <Route path="/pdf" element={renderProtected(<PDFPage />)} />
-        <Route path="/translate" element={renderProtected(<TranslatePage />)} />
-        <Route path="/vision" element={renderProtected(<VisionPage />)} />
-        <Route path="/ocr" element={renderProtected(<OCRPage />)} />
-        <Route path="/grammar" element={renderProtected(<GrammarPage />)} />
-        <Route path="/email" element={renderProtected(<EmailWriterPage />)} />
-        <Route path="/resume" element={renderProtected(<ResumeBuilderPage />)} />
-        <Route path="/sql" element={renderProtected(<SQLGeneratorPage />)} />
-        <Route path="/regex" element={renderProtected(<RegexGeneratorPage />)} />
-        <Route path="/json" element={renderProtected(<JSONFormatterPage />)} />
-        <Route path="/debug" element={renderProtected(<CodeDebuggerPage />)} />
-        <Route path="/explain" element={renderProtected(<CodeExplainerPage />)} />
-        <Route path="/optimize" element={renderProtected(<CodeOptimizerPage />)} />
-        <Route path="/profile" element={renderProtected(<ProfilePage />)} />
-        <Route path="/settings" element={renderProtected(<SettingsPage />)} />
-        <Route path="/chat-history" element={renderProtected(<ChatHistoryPage />)} />
-        <Route path="/image-history" element={renderProtected(<ImageHistoryPage />)} />
-        <Route path="/favorites" element={renderProtected(<FavoritesPage />)} />
-        <Route path="/notifications" element={renderProtected(<NotificationsPage />)} />
-        <Route path="/subscription" element={renderProtected(<SubscriptionPage />)} />
-        <Route path="/pricing" element={<PricingPage />} />
-        <Route path="/about" element={<AboutPage />} />
-        <Route path="/contact" element={<ContactPage />} />
-        <Route path="/privacy" element={<PrivacyPage />} />
-        <Route path="/terms" element={<TermsPage />} />
-        <Route path="/cookies" element={<CookiesPage />} />
-        <Route path="/help" element={<HelpPage />} />
-        <Route path="/feedback" element={<FeedbackPage />} />
-        <Route path="/bug-report" element={<BugReportPage />} />
-        <Route path="/release-notes" element={<ReleaseNotesPage />} />
-        <Route path="/roadmap" element={<RoadmapPage />} />
-        <Route path="/status" element={<StatusPage />} />
-        <Route path="/admin" element={renderProtected(<AdminPage />)} />
-        <Route path="*" element={<NotFoundPage />} />
+        <Route path="/dashboard" element={<Suspense fallback={<PageLoader />}>{renderProtected(<DashboardPage />)}</Suspense>} />
+        <Route path="/chat" element={<Suspense fallback={<PageLoader />}>{renderProtected(<AIChatPage />)}</Suspense>} />
+        <Route path="/image" element={<Suspense fallback={<PageLoader />}>{renderProtected(<AIImagePage />)}</Suspense>} />
+        <Route path="/local-ai" element={<Suspense fallback={<PageLoader />}>{renderProtected(<LocalAIPage />)}</Suspense>} />
+        <Route path="/writer" element={<Suspense fallback={<PageLoader />}>{renderProtected(<WriterPage />)}</Suspense>} />
+        <Route path="/code" element={<Suspense fallback={<PageLoader />}>{renderProtected(<CodePage />)}</Suspense>} />
+        <Route path="/pdf" element={<Suspense fallback={<PageLoader />}>{renderProtected(<PDFPage />)}</Suspense>} />
+        <Route path="/translate" element={<Suspense fallback={<PageLoader />}>{renderProtected(<TranslatePage />)}</Suspense>} />
+        <Route path="/vision" element={<Suspense fallback={<PageLoader />}>{renderProtected(<VisionPage />)}</Suspense>} />
+        <Route path="/ocr" element={<Suspense fallback={<PageLoader />}>{renderProtected(<OCRPage />)}</Suspense>} />
+        <Route path="/grammar" element={<Suspense fallback={<PageLoader />}>{renderProtected(<GrammarPage />)}</Suspense>} />
+        <Route path="/email" element={<Suspense fallback={<PageLoader />}>{renderProtected(<EmailWriterPage />)}</Suspense>} />
+        <Route path="/resume" element={<Suspense fallback={<PageLoader />}>{renderProtected(<ResumeBuilderPage />)}</Suspense>} />
+        <Route path="/sql" element={<Suspense fallback={<PageLoader />}>{renderProtected(<SQLGeneratorPage />)}</Suspense>} />
+        <Route path="/regex" element={<Suspense fallback={<PageLoader />}>{renderProtected(<RegexGeneratorPage />)}</Suspense>} />
+        <Route path="/json" element={<Suspense fallback={<PageLoader />}>{renderProtected(<JSONFormatterPage />)}</Suspense>} />
+        <Route path="/debug" element={<Suspense fallback={<PageLoader />}>{renderProtected(<CodeDebuggerPage />)}</Suspense>} />
+        <Route path="/explain" element={<Suspense fallback={<PageLoader />}>{renderProtected(<CodeExplainerPage />)}</Suspense>} />
+        <Route path="/optimize" element={<Suspense fallback={<PageLoader />}>{renderProtected(<CodeOptimizerPage />)}</Suspense>} />
+        <Route path="/profile" element={<Suspense fallback={<PageLoader />}>{renderProtected(<ProfilePage />)}</Suspense>} />
+        <Route path="/settings" element={<Suspense fallback={<PageLoader />}>{renderProtected(<SettingsPage />)}</Suspense>} />
+        <Route path="/chat-history" element={<Suspense fallback={<PageLoader />}>{renderProtected(<ChatHistoryPage />)}</Suspense>} />
+        <Route path="/image-history" element={<Suspense fallback={<PageLoader />}>{renderProtected(<ImageHistoryPage />)}</Suspense>} />
+        <Route path="/favorites" element={<Suspense fallback={<PageLoader />}>{renderProtected(<FavoritesPage />)}</Suspense>} />
+        <Route path="/notifications" element={<Suspense fallback={<PageLoader />}>{renderProtected(<NotificationsPage />)}</Suspense>} />
+        <Route path="/subscription" element={<Suspense fallback={<PageLoader />}>{renderProtected(<SubscriptionPage />)}</Suspense>} />
+        <Route path="/pricing" element={<Suspense fallback={<PageLoader />}><PricingPage /></Suspense>} />
+        <Route path="/about" element={<Suspense fallback={<PageLoader />}><AboutPage /></Suspense>} />
+        <Route path="/contact" element={<Suspense fallback={<PageLoader />}><ContactPage /></Suspense>} />
+        <Route path="/privacy" element={<Suspense fallback={<PageLoader />}><PrivacyPage /></Suspense>} />
+        <Route path="/terms" element={<Suspense fallback={<PageLoader />}><TermsPage /></Suspense>} />
+        <Route path="/cookies" element={<Suspense fallback={<PageLoader />}><CookiesPage /></Suspense>} />
+        <Route path="/help" element={<Suspense fallback={<PageLoader />}><HelpPage /></Suspense>} />
+        <Route path="/feedback" element={<Suspense fallback={<PageLoader />}><FeedbackPage /></Suspense>} />
+        <Route path="/bug-report" element={<Suspense fallback={<PageLoader />}><BugReportPage /></Suspense>} />
+        <Route path="/release-notes" element={<Suspense fallback={<PageLoader />}><ReleaseNotesPage /></Suspense>} />
+        <Route path="/roadmap" element={<Suspense fallback={<PageLoader />}><RoadmapPage /></Suspense>} />
+        <Route path="/status" element={<Suspense fallback={<PageLoader />}><StatusPage /></Suspense>} />
+        <Route path="/admin" element={<Suspense fallback={<PageLoader />}>{renderProtected(<AdminPage />)}</Suspense>} />
+        <Route path="*" element={<Suspense fallback={<PageLoader />}><NotFoundPage /></Suspense>} />
       </Routes></motion.div>}
       </AnimatePresence>
     </>

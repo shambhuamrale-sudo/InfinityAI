@@ -25,5 +25,17 @@ export default defineConfig({
         secure: false
       }
     }
+  },
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          react: ['react', 'react-dom'],
+          framerMotion: ['framer-motion'],
+          lucide: ['lucide-react'],
+          syntaxHighlight: ['react-syntax-highlighter']
+        }
+      }
+    }
   }
 })

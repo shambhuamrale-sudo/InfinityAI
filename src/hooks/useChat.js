@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import jsPDF from 'jspdf'
 import { API_BASE } from '../config/api'
 import { hasImageIntent } from '../utils/imageIntent'
 
@@ -449,6 +448,7 @@ export function useChat() {
         if (!res.ok) throw new Error('Export failed')
         const data = await res.json()
         const conversation = data.conversation
+        const { default: jsPDF } = await import('jspdf')
         const doc = new jsPDF()
         doc.setFontSize(18)
         doc.text(conversation.title || 'Conversation', 14, 22)
