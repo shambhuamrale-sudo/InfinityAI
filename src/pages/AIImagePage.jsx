@@ -368,6 +368,7 @@ export default function AIImagePage() {
                 elapsed={elapsed}
                 onCancel={studio.cancel}
                 onEdit={runEdit}
+                onOpenViewer={() => {}}
                 images={images}
                 prompt={prompt}
                 setPrompt={setPrompt}

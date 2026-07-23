@@ -522,6 +522,7 @@ export function useChat() {
     allMessages: messages,
     loading,
     error,
+    setError,
     streamingText,
     streamingStatus,
     searchQuery,
@@ -548,6 +549,7 @@ export function useChat() {
     regenerateResponse,
     editMessage,
     uploadAttachment,
+    removeAttachment,
     exportConversation,
     clearMessages,
     scrollToBottom

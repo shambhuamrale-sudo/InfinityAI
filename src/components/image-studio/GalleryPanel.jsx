@@ -5,12 +5,15 @@ import LazyImage from '../LazyImage'
 import GlassPanel from '../GlassPanel'
 import ImageViewer from './ImageViewer'
 
+const PAGE_SIZE = 20
+
 export default function GalleryPanel({ images, onAction, collections, isOpen }) {
   const [query, setQuery] = useState('')
   const [filter, setFilter] = useState('all')
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE)
   const [viewerImages, setViewerImages] = useState([])
   const [viewerIndex, setViewerIndex] = useState(0)
+  const [showViewer, setShowViewer] = useState(false)
   const sentinelRef = useRef(null)
 
   const filtered = useMemo(() => {
@@ -137,14 +140,16 @@ export default function GalleryPanel({ images, onAction, collections, isOpen }) 
       </div>
 
       {/* Gallery Viewer */}
-      <ImageViewer
-        images={viewerImages}
-        initialIndex={viewerIndex}
-        onClose={() => setShowViewer(false)}
-        onDelete={handleViewerDelete}
-        onToggleFavorite={handleViewerToggleFavorite}
-        onNavigate={setViewerIndex}
-      />
+      {showViewer && (
+        <ImageViewer
+          images={viewerImages}
+          initialIndex={viewerIndex}
+          onClose={() => setShowViewer(false)}
+          onDelete={handleViewerDelete}
+          onToggleFavorite={handleViewerToggleFavorite}
+          onNavigate={setViewerIndex}
+        />
+      )}
     </div>
   )
 }

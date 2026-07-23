@@ -16,6 +16,7 @@ export default function WorkspacePanel({
   elapsed,
   onCancel,
   onEdit,
+  onOpenViewer,
   images,
   setPrompt,
   onGenerate,
