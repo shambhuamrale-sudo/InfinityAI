@@ -20,11 +20,11 @@ const qualityLabels = {
 function Badge({ local }) {
   return (
     <span
-      className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[0.65rem] font-semibold uppercase tracking-[0.15em] ${
+      className={`inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[0.6rem] font-semibold uppercase tracking-[0.12em] ${
         local ? 'bg-emerald-400/10 text-emerald-300 ring-1 ring-emerald-400/20' : 'bg-indigo-400/10 text-indigo-300 ring-1 ring-indigo-400/20'
       }`}
     >
-      {local ? <Cpu className="h-3 w-3" /> : <Cloud className="h-3 w-3" />}
+      {local ? <Cpu className="h-2.5 w-2.5" /> : <Cloud className="h-2.5 w-2.5" />}
       {local ? 'Local' : 'Cloud'}
     </span>
   )
@@ -106,14 +106,14 @@ export default function ModelSelector({ className = '' }) {
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="flex w-full items-center gap-2 rounded-2xl border border-white/8 bg-white/[0.04] px-3 py-2 text-sm text-white transition hover:bg-white/[0.07]"
+        className="flex w-full items-center gap-1.5 rounded-lg border border-white/8 bg-white/[0.04] px-2.5 py-1 text-xs text-white transition hover:bg-white/[0.07] h-8"
         aria-haspopup="listbox"
         aria-expanded={open}
       >
-        <Sparkles className="h-4 w-4 shrink-0 text-indigo-300" />
+        <Sparkles className="h-3.5 w-3.5 shrink-0 text-indigo-300" />
         <span className="min-w-0 flex-1 truncate text-left font-medium">{label}</span>
         {activeProvider && <Badge local={activeProvider.local} />}
-        <ChevronDown className={`h-4 w-4 shrink-0 text-slate-400 transition ${open ? 'rotate-180' : ''}`} />
+        <ChevronDown className={`h-3.5 w-3.5 shrink-0 text-slate-400 transition ${open ? 'rotate-180' : ''}`} />
       </button>
 
       <AnimatePresence>
@@ -134,11 +134,11 @@ export default function ModelSelector({ className = '' }) {
               providers.map((provider) => (
                 <div key={provider.id} className="mb-1.5 last:mb-0">
                   <div className="flex items-center justify-between px-2 py-1.5">
-                    <span className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">{provider.name}</span>
+                    <span className="text-[0.65rem] font-semibold uppercase tracking-[0.15em] text-slate-400">{provider.name}</span>
                     <div className="flex items-center gap-1.5">
                       <Badge local={provider.local} />
                       {!provider.implemented && (
-                        <span className="rounded-full bg-amber-400/10 px-2 py-0.5 text-[0.6rem] font-semibold uppercase tracking-[0.15em] text-amber-300 ring-1 ring-amber-400/20">
+                        <span className="rounded-full bg-amber-400/10 px-1.5 py-0.5 text-[0.6rem] font-semibold uppercase tracking-[0.12em] text-amber-300 ring-1 ring-amber-400/20">
                           Soon
                         </span>
                       )}
@@ -151,7 +151,7 @@ export default function ModelSelector({ className = '' }) {
                         key={`${provider.id}:${model.id}`}
                         type="button"
                         onClick={() => handleSelect(provider.id, model.id)}
-                        className={`flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-sm transition ${
+                        className={`flex w-full items-center gap-2 rounded-xl px-2.5 py-1.5 text-left text-xs transition ${
                           isActive ? 'bg-white/[0.08] text-white' : 'text-slate-300 hover:bg-white/[0.05]'
                         }`}
                         role="option"

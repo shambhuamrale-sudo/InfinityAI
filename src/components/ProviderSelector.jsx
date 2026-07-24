@@ -67,13 +67,13 @@ export default function ProviderSelector() {
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="flex items-center gap-2 rounded-2xl border border-white/8 bg-white/[0.04] px-3 py-2 text-sm text-white transition hover:bg-white/[0.07]"
+        className="flex items-center gap-1.5 rounded-lg border border-white/8 bg-white/[0.04] px-2.5 py-1 text-xs text-white transition hover:bg-white/[0.07] h-8"
         aria-haspopup="listbox"
         aria-expanded={open}
       >
         <span className="min-w-0 flex-1 truncate text-left font-medium">{label}</span>
         <span className={`text-slate-400 transition ${open ? 'rotate-180' : ''}`}>
-          <ChevronDown className="h-4 w-4" />
+          <ChevronDown className="h-3.5 w-3.5" />
         </span>
       </button>
 
