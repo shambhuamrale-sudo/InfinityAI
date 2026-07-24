@@ -55,9 +55,6 @@ export function useChat() {
     return messages.filter((m) => (m.content || '').toLowerCase().includes(q))
   }, [messages, searchQuery])
 
-  const scrollToBottom = useMemo(() => {
-    return () => scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' })
-  }, [])
 
   useEffect(() => {
     if (showSearch && searchInputRef.current) {
@@ -309,9 +306,10 @@ export function useChat() {
       caughtErr = err
       if (err.name !== 'AbortError') {
         setError(err.message)
+        const displayError = err.message || 'The chat service is temporarily unavailable. Please try again shortly.'
         setMessages((prev) => {
           const next = [...prev]
-          next[next.length - 1] = { ...next[next.length - 1], content: 'The chat service is temporarily unavailable. Please try again shortly.', status: 'error' }
+          next[next.length - 1] = { ...next[next.length - 1], content: displayError, status: 'error' }
           return next
         })
       }
@@ -540,8 +538,7 @@ export function useChat() {
     editMessage,
     uploadAttachment,
     exportConversation,
-    clearMessages,
-    scrollToBottom
+    clearMessages
   }
 }
 

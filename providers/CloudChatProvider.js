@@ -103,7 +103,7 @@ export class CloudChatProvider extends BaseProvider {
   async chat({ prompt, model, messages } = {}) {
     const usedModel = model || this._models[0]?.id
     if (!this.isConfigured()) {
-      throw new Error(`${this.name} API key not configured.`)
+      throw new Error(`${this.name} API key is missing.`)
     }
     try {
       const result = await withRetry(() =>
@@ -127,7 +127,7 @@ export class CloudChatProvider extends BaseProvider {
   async streamChat({ prompt, model, messages } = {}, onChunk) {
     const usedModel = model || this._models[0]?.id
     if (!this.isConfigured()) {
-      const err = new Error(`${this.name} API key not configured.`)
+      const err = new Error(`${this.name} API key is missing.`)
       if (onChunk) onChunk('')
       throw err
     }

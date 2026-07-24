@@ -752,6 +752,7 @@ app.post('/api/admin/config', async (req, res) => {
 })
 
 app.post('/api/chat', userLimiter, async (req, res) => {
+  console.log(`[Chat] request received: provider=${req.body?.provider}, aiMode=${req.body?.aiMode}, stream=${Boolean(req.body?.stream)}, promptLength=${req.body?.prompt?.length || 0}`)
   const prompt = req.body?.prompt || ''
   const messages = Array.isArray(req.body?.messages) ? req.body.messages : undefined
   const state = await loadState()
@@ -761,6 +762,7 @@ app.post('/api/chat', userLimiter, async (req, res) => {
   const provider = req.body?.provider || state.adminConfig.providerConfig?.chatProvider || DEFAULT_PROVIDER
   const model = req.body?.model || state.adminConfig.providerConfig?.chatModel || process.env.OLLAMA_MODEL || 'llama3.2'
   const stream = Boolean(req.body?.stream)
+  console.log(`[Chat] resolved: provider=${provider}, model=${model}, aiMode=${aiMode}, stream=${stream}`)
   if (stream) {
     res.setHeader('Content-Type', 'text/event-stream')
     res.setHeader('Cache-Control', 'no-cache')
@@ -784,6 +786,7 @@ app.post('/api/chat', userLimiter, async (req, res) => {
         }
       } else {
         const selected = providerManager.select(provider)
+        console.log(`[Chat] stream: selected provider=${selected?.id}, hasStreamChat=${!!selected?.streamChat}`)
         if (selected && selected.streamChat) {
           await selected.streamChat({ prompt, model, messages }, (chunk) => {
             res.write(`data: ${JSON.stringify({ text: chunk })}\n\n`)
@@ -794,6 +797,7 @@ app.post('/api/chat', userLimiter, async (req, res) => {
         }
       }
     } catch (error) {
+      console.error(`[Chat] stream error: provider=${provider}, error=${error.message}`)
       res.write(`data: ${JSON.stringify({ error: error.message })}\n\n`)
     }
     res.write('data: [DONE]\n\n')
@@ -802,10 +806,11 @@ app.post('/api/chat', userLimiter, async (req, res) => {
   }
   try {
     const result = await providerManager.chat({ provider, prompt, model, messages, aiMode })
+    console.log(`[Chat] success: provider=${result.provider}, model=${result.model}`)
     await saveState({ ...state, usage: { ...state.usage, dayChats: state.usage.dayChats + 1, monthChats: state.usage.monthChats + 1 } })
     res.json(result)
   } catch (error) {
-    console.error('Chat error:', error)
+    console.error(`[Chat] error: provider=${provider}, aiMode=${aiMode}, error=${error.message}`)
     res.status(400).json({ error: error.message || 'Chat service unavailable' })
   }
 })

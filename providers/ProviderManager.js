@@ -185,14 +185,22 @@ export class ProviderManager {
    * to fake responses.
    */
   async chat({ provider: providerId, prompt, model, messages, aiMode } = {}) {
+    const targetProvider = aiMode === 'local' ? 'local' : providerId || this.defaultProviderId
+    console.log(`[ProviderManager] chat request: provider=${targetProvider}, aiMode=${aiMode || 'cloud'}, model=${model || 'default'}`)
     let primary
     if (aiMode === 'local') {
       primary = await this.selectForMode('local')
       if (!primary) {
+        console.warn('[ProviderManager] No local provider available')
         throw new Error('Local AI is unavailable. Switch to Cloud mode or verify your local setup.')
       }
     } else {
       primary = this.select(providerId)
+      if (!primary) {
+        console.warn(`[ProviderManager] Provider "${providerId}" not found, fallback "${this.defaultProviderId}" also missing`)
+      } else {
+        console.log(`[ProviderManager] Selected provider: ${primary.id} (${primary.name})`)
+      }
     }
 
     if (!primary) {
@@ -201,9 +209,11 @@ export class ProviderManager {
 
     const params = { prompt, model, messages }
     try {
-      return await primary.chat(params)
+      const result = await primary.chat(params)
+      console.log(`[ProviderManager] chat success: provider=${result.provider}, model=${result.model}, textLength=${result.text?.length || 0}`)
+      return result
     } catch (error) {
-      console.warn(`Provider "${providerId || primary.id}" chat failed:`, error.message)
+      console.warn(`[ProviderManager] Provider "${providerId || primary.id}" chat failed:`, error.message)
       throw error
     }
   }
@@ -213,14 +223,22 @@ export class ProviderManager {
    * error on failure. No silent fallback.
    */
   async streamChat({ provider: providerId, prompt, model, messages, aiMode } = {}, onChunk) {
+    const targetProvider = aiMode === 'local' ? 'local' : providerId || this.defaultProviderId
+    console.log(`[ProviderManager] streamChat request: provider=${targetProvider}, aiMode=${aiMode || 'cloud'}, model=${model || 'default'}`)
     let primary
     if (aiMode === 'local') {
       primary = await this.selectForMode('local')
       if (!primary) {
+        console.warn('[ProviderManager] No local provider available for stream')
         throw new Error('Local AI is unavailable. Switch to Cloud mode or verify your local setup.')
       }
     } else {
       primary = this.select(providerId)
+      if (!primary) {
+        console.warn(`[ProviderManager] Provider "${providerId}" not found for stream, fallback missing`)
+      } else {
+        console.log(`[ProviderManager] Selected stream provider: ${primary.id} (${primary.name})`)
+      }
     }
 
     if (!primary) {

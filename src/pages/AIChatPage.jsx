@@ -45,8 +45,7 @@ export default function AIChatPage() {
     editMessage,
     uploadAttachment,
     exportConversation,
-    clearMessages,
-    scrollToBottom
+    clearMessages
   } = useChat()
 
   const loadConversationsRef = useRef(loadConversations)
@@ -162,6 +161,7 @@ export default function AIChatPage() {
   const scrollHandlerRef = useRef(null)
   const [unreadCount, setUnreadCount] = useState(0)
   const pendingForceScroll = useRef(false)
+  const messagesEndRef = useRef(null)
 
   useEffect(() => {
     const el = scrollRef.current
@@ -182,20 +182,18 @@ export default function AIChatPage() {
   }, [scrollRef])
 
   useEffect(() => {
-    const el = scrollRef.current
-    if (!el) return
     if (pendingForceScroll.current || isNearBottom) {
       pendingForceScroll.current = false
-      el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' })
+      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' })
     } else if (loading && streamingStatus === 'streaming') {
       setUnreadCount(prev => prev + 1)
     }
-  }, [messages, streamingText, isNearBottom, loading, streamingStatus, scrollRef, pendingForceScroll])
+  }, [messages, streamingText, isNearBottom, loading, streamingStatus, pendingForceScroll])
 
   const handleScrollToBottom = useCallback(() => {
-    scrollToBottom?.()
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' })
     setUnreadCount(0)
-  }, [scrollToBottom])
+  }, [])
 
   return (
     <div className="app-canvas relative flex h-screen overflow-hidden text-white">
@@ -280,10 +278,10 @@ export default function AIChatPage() {
               </div>
             )}
 
-            <div
-              ref={scrollRef}
-              className="h-full space-y-6 overflow-y-auto pr-1 pb-24 custom-scrollbar"
-            >
+              <div
+                ref={scrollRef}
+                className="flex-1 min-h-0 space-y-6 overflow-y-auto scroll-smooth pr-1 pb-[140px] custom-scrollbar"
+              >
               {messages.length === 0 && !loading ? (
                 <motion.div
                   initial={{ opacity: 0, y: 20 }}
@@ -361,6 +359,7 @@ export default function AIChatPage() {
                       </div>
                     </motion.div>
                   )}
+                  <div ref={messagesEndRef} />
                 </>
               )}
             </div>

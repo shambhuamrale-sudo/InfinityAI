@@ -80,9 +80,9 @@ export class LMStudioProvider extends BaseProvider {
       }
     } catch (error) {
       console.warn('LM Studio chat failed:', error.message)
-      throw new Error(`LM Studio is not reachable at ${this.baseUrl}: ${error.message}`)
+      throw new Error('LM Studio is not running.')
     }
-    throw new Error(`LM Studio did not return a response for model "${usedModel}".`)
+    throw new Error('LM Studio is not running.')
   }
 
   async streamChat({ prompt, model, messages } = {}, onChunk) {
@@ -131,7 +131,7 @@ export class LMStudioProvider extends BaseProvider {
       return { text: fullText.trim(), provider: this.id, model: usedModel, usedFallback: false }
     } catch (error) {
       console.warn('LM Studio streaming failed:', error.message)
-      const err = new Error(`LM Studio streaming failed: ${error.message}`)
+      const err = new Error('LM Studio is not running.')
       if (onChunk) onChunk('')
       throw err
     }

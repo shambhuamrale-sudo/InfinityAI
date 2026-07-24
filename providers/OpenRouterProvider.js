@@ -47,7 +47,7 @@ export class OpenRouterProvider extends CloudChatProvider {
   async chat({ prompt, model, messages } = {}) {
     const usedModel = model || this._models[0]?.id
     if (!this.isConfigured()) {
-      throw new Error(`${this.name} API key not configured.`)
+      throw new Error(`${this.name} API key is missing.`)
     }
     const body = this.buildBody({ messages, prompt, model: usedModel })
     try {
@@ -77,7 +77,7 @@ export class OpenRouterProvider extends CloudChatProvider {
         return result
       } catch (retryError) {
         if (retryError.status === 402) {
-          return { success: false, error: 'OpenRouter token limit reached' }
+          throw new Error(`${this.name} token limit reached.`)
         }
         throw retryError
       }
@@ -87,7 +87,7 @@ export class OpenRouterProvider extends CloudChatProvider {
   async streamChat({ prompt, model, messages } = {}, onChunk) {
     const usedModel = model || this._models[0]?.id
     if (!this.isConfigured()) {
-      const err = new Error(`${this.name} API key not configured.`)
+      const err = new Error(`${this.name} API key is missing.`)
       if (onChunk) onChunk('')
       throw err
     }

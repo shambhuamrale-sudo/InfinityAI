@@ -92,9 +92,9 @@ export class OllamaProvider extends BaseProvider {
       }
     } catch (error) {
       console.warn('Ollama chat failed:', error.message)
-      throw new Error(`Ollama is not reachable at ${this.baseUrl}: ${error.message}`)
+      throw new Error('Ollama is not running.')
     }
-    throw new Error(`Ollama did not return a response for model "${usedModel}".`)
+    throw new Error('Ollama is not running.')
   }
 
   async streamChat({ prompt, model, messages } = {}, onChunk) {
@@ -137,7 +137,7 @@ export class OllamaProvider extends BaseProvider {
       return { text: fullText.trim(), provider: this.id, model: usedModel, usedFallback: false }
     } catch (error) {
       console.warn('Ollama streaming failed:', error.message)
-      const err = new Error(`Ollama streaming failed: ${error.message}`)
+      const err = new Error('Ollama is not running.')
       if (onChunk) onChunk('')
       throw err
     }
