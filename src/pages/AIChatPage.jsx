@@ -91,18 +91,22 @@ export default function AIChatPage() {
     }
     const text = prompt.trim()
     setPrompt('')
+    pendingForceScroll.current = true
     await sendMessage(text, { provider: preferences?.chatProvider, model: preferences?.chatModel, aiMode: preferences?.defaultAIMode })
   }, [prompt, attachments, canUseTool, setError, sendMessage, preferences])
 
   const handleRetry = useCallback(async (index) => {
+    pendingForceScroll.current = true
     await retryMessage(index)
   }, [retryMessage])
 
   const handleRegenerate = useCallback(async (index) => {
+    pendingForceScroll.current = true
     await regenerateResponse(index)
   }, [regenerateResponse])
 
   const handleEdit = useCallback(async (index, newContent) => {
+    pendingForceScroll.current = true
     await editMessage(index, newContent)
   }, [editMessage])
 
@@ -157,6 +161,7 @@ export default function AIChatPage() {
   const [isNearBottom, setIsNearBottom] = useState(true)
   const scrollHandlerRef = useRef(null)
   const [unreadCount, setUnreadCount] = useState(0)
+  const pendingForceScroll = useRef(false)
 
   useEffect(() => {
     const el = scrollRef.current
@@ -179,12 +184,13 @@ export default function AIChatPage() {
   useEffect(() => {
     const el = scrollRef.current
     if (!el) return
-    if (isNearBottom) {
+    if (pendingForceScroll.current || isNearBottom) {
+      pendingForceScroll.current = false
       el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' })
     } else if (loading && streamingStatus === 'streaming') {
       setUnreadCount(prev => prev + 1)
     }
-  }, [messages, streamingText, isNearBottom, loading, streamingStatus, scrollRef])
+  }, [messages, streamingText, isNearBottom, loading, streamingStatus, scrollRef, pendingForceScroll])
 
   const handleScrollToBottom = useCallback(() => {
     scrollToBottom?.()
@@ -276,7 +282,7 @@ export default function AIChatPage() {
 
             <div
               ref={scrollRef}
-              className="h-full space-y-6 overflow-y-auto pr-1 pb-4 custom-scrollbar"
+              className="h-full space-y-6 overflow-y-auto pr-1 pb-24 custom-scrollbar"
             >
               {messages.length === 0 && !loading ? (
                 <motion.div
@@ -381,7 +387,7 @@ export default function AIChatPage() {
             </AnimatePresence>
           </div>
 
-          <div className="mt-4">
+          <div className="mt-4 sticky bottom-0 relative z-10">
             <ChatInput
               prompt={prompt}
               setPrompt={setPrompt}

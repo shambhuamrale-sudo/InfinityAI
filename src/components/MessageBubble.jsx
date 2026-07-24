@@ -160,9 +160,11 @@ export default function MessageBubble({
               )}
             </div>
 
-            <div className="mt-2.5 flex items-center gap-2 text-[0.7rem] text-slate-500">
+            <div className={`mt-1 flex items-center gap-2 ${isUser ? 'justify-end' : ''}`}>
               {timestamp && (
-                <span>{new Date(timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                <span className="text-[11px] leading-none opacity-55">
+                  {new Date(timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                </span>
               )}
               {isError && (
                 <span className="flex items-center gap-1 text-red-400">

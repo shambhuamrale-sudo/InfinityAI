@@ -60,16 +60,6 @@ export function useChat() {
   }, [])
 
   useEffect(() => {
-    if (scrollRef.current) {
-      const { scrollTop, scrollHeight, clientHeight } = scrollRef.current
-      const isNearBottom = scrollHeight - scrollTop - clientHeight < 120
-      if (isNearBottom || streamingStatus === 'streaming') {
-        scrollRef.current.scrollTop = scrollRef.current.scrollHeight
-      }
-    }
-  }, [messages, streamingText, streamingStatus])
-
-  useEffect(() => {
     if (showSearch && searchInputRef.current) {
       searchInputRef.current.focus()
     }
