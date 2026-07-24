@@ -549,7 +549,6 @@ export function useChat() {
     regenerateResponse,
     editMessage,
     uploadAttachment,
-    removeAttachment,
     exportConversation,
     clearMessages,
     scrollToBottom
